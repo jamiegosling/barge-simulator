@@ -124,6 +124,50 @@ local function viewAllKeys()
 	end
 end
 
+-- Debug function to force save current data
+local function forceSaveData(player)
+	local userId = tostring(player.UserId)
+	local upgrades = require(script.Parent:WaitForChild("UpgradeManager")).getPlayerUpgrades(player)
+	
+	if not upgrades then
+		print("No upgrade data found to save")
+		return
+	end
+	
+	-- Get current money from leaderstats
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if leaderstats then
+		local money = leaderstats:FindFirstChild("Money")
+		if money then
+			upgrades.money = money.Value
+		end
+	end
+	
+	local success, errorMessage = pcall(function()
+		upgradeDataStore:SetAsync(userId, upgrades)
+	end)
+	
+	if success then
+		print("Force saved data for " .. player.Name .. ":")
+		print("  Speed Level:", upgrades.speedLevel)
+		print("  Money:", upgrades.money)
+	else
+		print("Failed to force save:", errorMessage)
+	end
+end
+
+-- Debug function to toggle auto-save
+local function toggleAutoSave(player)
+	local UpgradeManager = require(script.Parent:WaitForChild("UpgradeManager"))
+	local currentStatus = not UpgradeManager.isPlayerAutoSaveDisabled(player)
+	local newStatus = not currentStatus
+	UpgradeManager.setPlayerAutoSave(player, newStatus)
+	print("Auto-save is now", newStatus and "ENABLED" or "DISABLED", "for", player.Name)
+	if not newStatus then
+		print("Warning: Your data will not be saved on leave. Use /forcesave to save manually.")
+	end
+end
+
 -- Command for testing (admins only)
 local function processCommand(player, command)
 	if not (player.UserId == game.CreatorId or (TEST_USER_ID > 0 and player.UserId == TEST_USER_ID)) then
@@ -160,6 +204,10 @@ local function processCommand(player, command)
 		clearPlayerData(player)
 	elseif command == "/viewkeys" then
 		viewAllKeys()
+	elseif command == "/forcesave" then
+		forceSaveData(player)
+	elseif command == "/autosave" then
+		toggleAutoSave(player)
 	elseif command == "/help" then
 		print("=== Debug Commands ===")
 		print("/add [amount] - Add test money")
@@ -168,6 +216,8 @@ local function processCommand(player, command)
 		print("/setdata [speedLevel] [money] - Set DataStore values")
 		print("/cleardata - Clear DataStore data")
 		print("/viewkeys - View all DataStore keys")
+		print("/forcesave - Force save current data")
+		print("/autosave - Toggle auto-save on/off (player-specific)")
 		print("/help - Show this help")
 	else
 		print("Unknown command. Type /help for available commands.")

@@ -20,13 +20,47 @@ local UPGRADE_CONFIG = {
 	speed = {
 		baseCost = 100,
 		costMultiplier = 1.5,
-		speedIncrease = 2,
+		speedIncrease = 1.1,
 		maxLevel = 20
 	}
 }
 
 -- Player upgrade data cache
 local playerUpgrades = {}
+
+-- Auto-save control (can be modified by test script)
+local autoSaveEnabled = true
+
+-- Player-specific auto-save control (for testing)
+local playersWithDisabledAutoSave = {}
+
+-- Function to get auto-save status
+function getAutoSaveEnabled()
+	return autoSaveEnabled
+end
+
+-- Function to set auto-save status
+function setAutoSaveEnabled(enabled)
+	autoSaveEnabled = enabled
+end
+
+-- Function to disable auto-save for specific player (testing)
+function setPlayerAutoSave(player, enabled)
+	local userId = tostring(player.UserId)
+	if enabled then
+		playersWithDisabledAutoSave[userId] = nil
+		print("Auto-save ENABLED for", player.Name)
+	else
+		playersWithDisabledAutoSave[userId] = true
+		print("Auto-save DISABLED for", player.Name, "(testing mode)")
+	end
+end
+
+-- Function to check if player has auto-save disabled
+function isPlayerAutoSaveDisabled(player)
+	local userId = tostring(player.UserId)
+	return playersWithDisabledAutoSave[userId] == true
+end
 
 -- Initialize player upgrades when they join
 local function initializePlayerUpgrades(player)
@@ -104,6 +138,12 @@ end
 
 -- Save player upgrades to DataStore
 local function savePlayerUpgrades(player)
+	-- Check if auto-save is disabled for this specific player
+	if isPlayerAutoSaveDisabled(player) then
+		print("Auto-save disabled for", player.Name, "- skipping save")
+		return
+	end
+	
 	local userId = tostring(player.UserId)
 	local upgrades = playerUpgrades[userId]
 	
@@ -146,6 +186,19 @@ local function getUpgradeCost(upgradeType, currentLevel)
 	end
 	
 	return math.floor(config.baseCost * (config.costMultiplier ^ (currentLevel - 1)))
+end
+
+-- Get current boat speed multiplier
+local function getSpeedMultiplier(player)
+	local userId = tostring(player.UserId)
+	local upgrades = playerUpgrades[userId]
+	
+	if not upgrades or not upgrades.speedLevel then 
+		return 1 
+	end
+	
+	local config = UPGRADE_CONFIG.speed
+	return 1.1 ^ (upgrades.speedLevel - 1)
 end
 
 -- Update boat speed with current upgrades
@@ -254,20 +307,25 @@ local function purchaseUpgrade(player, upgradeType)
 	}
 end
 
--- Get current boat speed multiplier
-local function getSpeedMultiplier(player)
-	local userId = tostring(player.UserId)
-	local upgrades = playerUpgrades[userId]
-	
-	if not upgrades or not upgrades.speedLevel then 
-		return 1 
-	end
-	
-	local config = UPGRADE_CONFIG.speed
-	return 1 + (upgrades.speedLevel - 1) * config.speedIncrease
-end
+-- Player events
+Players.PlayerAdded:Connect(initializePlayerUpgrades)
 
--- Handle upgrade requests
+Players.PlayerRemoving:Connect(savePlayerUpgrades)
+
+-- Auto-save every 60 seconds (respects player-specific settings)
+coroutine.wrap(function()
+	while true do
+		task.wait(60)
+		for _, player in ipairs(Players:GetPlayers()) do
+			-- Only save if auto-save is not disabled for this player
+			if not isPlayerAutoSaveDisabled(player) then
+				savePlayerUpgrades(player)
+			end
+		end
+	end
+end)()
+
+-- Handle upgrade requests (defined after all functions are available)
 upgradeEvent.OnServerEvent:Connect(function(player, action, upgradeType)
 	if action == "purchase" then
 		local result = purchaseUpgrade(player, upgradeType)
@@ -290,23 +348,15 @@ upgradeEvent.OnServerEvent:Connect(function(player, action, upgradeType)
 	end
 end)
 
--- Player events
-Players.PlayerAdded:Connect(initializePlayerUpgrades)
-
-Players.PlayerRemoving:Connect(savePlayerUpgrades)
-
--- Auto-save every 60 seconds
-coroutine.wrap(function()
-	while true do
-		task.wait(60)
-		for _, player in ipairs(Players:GetPlayers()) do
-			savePlayerUpgrades(player)
-		end
-	end
-end)()
-
 -- Export functions for other scripts
 return {
 	getSpeedMultiplier = getSpeedMultiplier,
-	getPlayerUpgrades = function(player) return playerUpgrades[tostring(player.UserId)] end
+	getPlayerUpgrades = function(player) 
+		local userId = tostring(player.UserId)
+		return playerUpgrades[userId]
+	end,
+	getAutoSaveEnabled = getAutoSaveEnabled,
+	setAutoSaveEnabled = setAutoSaveEnabled,
+	setPlayerAutoSave = setPlayerAutoSave,
+	isPlayerAutoSaveDisabled = isPlayerAutoSaveDisabled
 }

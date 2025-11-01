@@ -95,7 +95,7 @@ local function createShopGui()
 	speedInfo.Size = UDim2.new(1, -20, 0, 40)
 	speedInfo.Position = UDim2.new(0, 10, 0, 40)
 	speedInfo.BackgroundTransparency = 1
-	speedInfo.Text = "Current Level: 1\nSpeed Multiplier: 1.0x"
+	speedInfo.Text = "Current Level: 1\nSpeed Multiplier: 1.00x (0% faster)"
 	speedInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
 	speedInfo.TextSize = 14
 	speedInfo.Font = Enum.Font.Gotham
@@ -171,7 +171,8 @@ end
 -- Handle upgrade info response
 UpgradeEvent.OnClientEvent:Connect(function(action, data)
 	if action == "upgradeInfo" then
-		speedInfo.Text = string.format("Current Level: %d\nSpeed Multiplier: %.1fx", data.currentLevel, data.speedMultiplier)
+		local percentageIncrease = math.floor((data.speedMultiplier - 1) * 100)
+		speedInfo.Text = string.format("Current Level: %d\nSpeed Multiplier: %.2fx (%d%% faster)", data.currentLevel, data.speedMultiplier, percentageIncrease)
 		
 		if data.nextCost then
 			costLabel.Text = "Next Upgrade: £" .. data.nextCost
