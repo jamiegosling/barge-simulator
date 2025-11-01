@@ -6,7 +6,54 @@ local JobStatus = ReplicatedStorage:WaitForChild("JobStatus")
 
 
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
-local ActiveJobs = {} -- player.UserId → job table
+local ActiveJobs = {} -- player.UserId → {job = job table, loaded = boolean}
+
+-- Helper function to check if player is in their boat
+local function IsPlayerInBoat(player)
+	local character = player.Character
+	if not character then 
+		print("DEBUG: No character found for", player.Name)
+		return false 
+	end
+	
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then 
+		print("DEBUG: No humanoid found for", player.Name)
+		return false 
+	end
+	
+	local seat = humanoid.SeatPart
+	if not seat then 
+		print("DEBUG: No SeatPart found for", player.Name)
+		return false 
+	end
+	
+	if not seat:IsA("VehicleSeat") then 
+		print("DEBUG: SeatPart is not a VehicleSeat for", player.Name, "found:", seat.Name, seat.ClassName)
+		return false 
+	end
+	
+	local boat = seat.Parent
+	if not boat then 
+		print("DEBUG: No parent found for seat", seat.Name)
+		return false 
+	end
+	
+	print("DEBUG: Player", player.Name, "is in seat:", seat.Name, "parent:", boat.Name)
+	
+	local ownerTag = boat:FindFirstChild("Owner")
+	if not ownerTag then 
+		print("DEBUG: No Owner tag found on boat", boat.Name)
+		return false 
+	end
+	
+	local isOwner = tostring(ownerTag.Value) == tostring(player.UserId)
+	print("DEBUG: Owner tag value:", ownerTag.Value, "type:", typeof(ownerTag.Value))
+	print("DEBUG: player UserId:", player.UserId, "type:", typeof(player.UserId))
+	print("DEBUG: matches:", isOwner)
+	
+	return isOwner
+end
 
 -- Helper function: play particle + sound effects for completed delivery
 local function PlayDeliveryEffect(player, color)
@@ -75,9 +122,9 @@ end)
 JobPicked.OnServerEvent:Connect(function(player, jobId)
 	local job = JobsManager:GetJobById(jobId)
 	if job then
-		ActiveJobs[player.UserId] = job
+		ActiveJobs[player.UserId] = {job = job, loaded = false}
 		print(player.Name .. " accepted job: " .. job.name) -- logging
-		JobMessage:FireClient(player, "Accepted job: " .. job.name)
+		JobMessage:FireClient(player, "Accepted job: " .. job.name .. ". Go to " .. job.from .. " to load your boat.")
 		JobStatus:FireClient(player, "accepted", job)
 	end
 end)
@@ -87,10 +134,37 @@ workspace.LeedsDeliveryZone.Touched:Connect(function(hit)
 	local player = Players:GetPlayerFromCharacter(hit.Parent)
 	if not player then return end
 
-	local job = ActiveJobs[player.UserId]
-	if not job then return end
+	local activeJob = ActiveJobs[player.UserId]
+	if not activeJob then return end
 
+	local job = activeJob.job
+	
+	-- Handle pickup logic (loading cargo)
+	if job.from == "Leeds" and not activeJob.loaded then
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to load cargo!")
+			return
+		end
+		
+		activeJob.loaded = true
+		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
+		JobStatus:FireClient(player, "loaded", job)
+		print(player.Name .. " loaded cargo at Leeds for job: " .. job.name)
+		return
+	end
+	
+	-- Handle delivery logic
 	if job.to == "Leeds" then
+		if not activeJob.loaded then
+			JobMessage:FireClient(player, "You need to load your boat at " .. job.from .. " first!")
+			return
+		end
+		
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to deliver!")
+			return
+		end
+		
 		player.leaderstats.Money.Value += job.reward
 		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
 		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
@@ -105,10 +179,37 @@ workspace.LondonDeliveryZone.Touched:Connect(function(hit)
 	local player = Players:GetPlayerFromCharacter(hit.Parent)
 	if not player then return end
 
-	local job = ActiveJobs[player.UserId]
-	if not job then return end
+	local activeJob = ActiveJobs[player.UserId]
+	if not activeJob then return end
 
+	local job = activeJob.job
+	
+	-- Handle pickup logic (loading cargo)
+	if job.from == "London" and not activeJob.loaded then
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to load cargo!")
+			return
+		end
+		
+		activeJob.loaded = true
+		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
+		JobStatus:FireClient(player, "loaded", job)
+		print(player.Name .. " loaded cargo at London for job: " .. job.name)
+		return
+	end
+	
+	-- Handle delivery logic
 	if job.to == "London" then
+		if not activeJob.loaded then
+			JobMessage:FireClient(player, "You need to load your boat at " .. job.from .. " first!")
+			return
+		end
+		
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to deliver!")
+			return
+		end
+		
 		player.leaderstats.Money.Value += job.reward
 		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
 		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
@@ -116,5 +217,50 @@ workspace.LondonDeliveryZone.Touched:Connect(function(hit)
 		ActiveJobs[player.UserId] = nil
 		-- 🎆 Play visual + audio effect
 		PlayDeliveryEffect(player, Color3.fromRGB(355, 50, 50)) -- red
+	end
+end)
+
+workspace.BristolDeliveryZone.Touched:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
+
+	local activeJob = ActiveJobs[player.UserId]
+	if not activeJob then return end
+
+	local job = activeJob.job
+	
+	-- Handle pickup logic (loading cargo)
+	if job.from == "Bristol" and not activeJob.loaded then
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to load cargo!")
+			return
+		end
+		
+		activeJob.loaded = true
+		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
+		JobStatus:FireClient(player, "loaded", job)
+		print(player.Name .. " loaded cargo at Bristol for job: " .. job.name)
+		return
+	end
+	
+	-- Handle delivery logic
+	if job.to == "Bristol" then
+		if not activeJob.loaded then
+			JobMessage:FireClient(player, "You need to load your boat at " .. job.from .. " first!")
+			return
+		end
+		
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to deliver!")
+			return
+		end
+		
+		player.leaderstats.Money.Value += job.reward
+		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
+		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
+		JobStatus:FireClient(player, "completed", job)
+		ActiveJobs[player.UserId] = nil
+		-- 🎆 Play visual + audio effect
+		PlayDeliveryEffect(player, Color3.fromRGB(255, 165, 0)) -- orange for Bristol
 	end
 end)

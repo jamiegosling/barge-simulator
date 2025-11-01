@@ -51,6 +51,9 @@ JobStatus.OnClientEvent:Connect(function(state, job)
 	if state == "accepted" then
 		statusLabel.Visible = true
 		statusLabel.Text = "📦 Current Job: " .. job.name .. " (" .. job.from .. " → " .. job.to .. ")"
+	elseif state == "loaded" then
+		statusLabel.Visible = true
+		statusLabel.Text = "⚓ Loaded: " .. job.name .. " (" .. job.from .. " → " .. job.to .. ")"
 	elseif state == "completed" then
 		statusLabel.Visible = true
 		statusLabel.Text = "✅ Completed!!: " .. job.name
