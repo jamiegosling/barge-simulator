@@ -8,6 +8,10 @@ local BoatFolder = Instance.new("Folder")
 BoatFolder.Name = "PlayerBoats"
 BoatFolder.Parent = workspace
 
+-- Import UpgradeManager
+local UpgradeManager = require(script.Parent:WaitForChild("UpgradeManager"))
+local upgradeDataLoaded = script.Parent:WaitForChild("UpgradeManager"):WaitForChild("UpgradeDataLoaded")
+
 local spawnPositions = {
 	Vector3.new(130, 10.341, -211.5),
 	Vector3.new(140, 10.341, -201.5),
@@ -15,6 +19,52 @@ local spawnPositions = {
 }
 
 local nextSpawnIndex = 1
+
+-- Apply speed upgrades to a boat
+local function applySpeedUpgrades(boat, player)
+	local speedMultiplier = UpgradeManager.getSpeedMultiplier(player)
+	
+	-- Find the VehicleSeat in the boat
+	local vehicleSeat = boat:FindFirstChildWhichIsA("VehicleSeat")
+	if vehicleSeat then
+		-- Look for the custom boat script in the seat
+		local boatScript = vehicleSeat:FindFirstChildWhichIsA("LocalScript")
+		if not boatScript then
+			-- Also check for regular Script
+			boatScript = vehicleSeat:FindFirstChildWhichIsA("Script")
+		end
+		
+		if boatScript then
+			-- Store original MaxSpeed if not already stored
+			if not boatScript:FindFirstChild("OriginalMaxSpeed") then
+				local originalSpeed = Instance.new("NumberValue")
+				originalSpeed.Name = "OriginalMaxSpeed"
+				originalSpeed.Value = 500 -- Default from your script
+				originalSpeed.Parent = boatScript
+			end
+			
+			-- Apply speed multiplier by creating a value in the script
+			local originalSpeed = boatScript:FindFirstChild("OriginalMaxSpeed")
+			if originalSpeed then
+				-- Remove old speed multiplier if it exists
+				local oldMultiplier = boatScript:FindFirstChild("SpeedMultiplier")
+				if oldMultiplier then
+					oldMultiplier:Destroy()
+				end
+				
+				-- Create new speed multiplier value
+				local speedMultiplierValue = Instance.new("NumberValue")
+				speedMultiplierValue.Name = "SpeedMultiplier"
+				speedMultiplierValue.Value = speedMultiplier
+				speedMultiplierValue.Parent = boatScript
+				
+				print("Applied speed multiplier", speedMultiplier, "to", player.Name .. "'s boat")
+			end
+		else
+			warn("No boat script found in VehicleSeat for", player.Name)
+		end
+	end
+end
 
 Players.PlayerAdded:Connect(function(player)
 	-- Clone boat
@@ -60,6 +110,11 @@ Players.PlayerAdded:Connect(function(player)
 
 	boat.Parent = BoatFolder
 	print("Spawned boat for", player.Name, "at position", spawnPos)
+	
+	-- Wait for upgrade data to be loaded before applying upgrades
+	upgradeDataLoaded.Event:Wait()
+	applySpeedUpgrades(boat, player)
+	print("Applied speed upgrades to", player.Name .. "'s boat after data loaded")
 end)
 
 Players.PlayerRemoving:Connect(function(player)
