@@ -3,7 +3,7 @@ print("🚤 BoatSpawner script is running!")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local BoatTemplate = ReplicatedStorage:WaitForChild("BoatTemplates"):WaitForChild("Boat")
+local BoatTemplate = ReplicatedStorage:WaitForChild("BoatTemplates"):WaitForChild("Barge")
 local BoatFolder = Instance.new("Folder")
 BoatFolder.Name = "PlayerBoats"
 BoatFolder.Parent = workspace

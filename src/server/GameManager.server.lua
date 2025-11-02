@@ -165,6 +165,9 @@ workspace.LeedsDeliveryZone.Touched:Connect(function(hit)
 			return
 		end
 		
+		-- Update resources based on job completion
+		JobsManager:CompleteJob(job)
+		
 		player.leaderstats.Money.Value += job.reward
 		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
 		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
