@@ -17,6 +17,7 @@ local upgradeDataStore = DataStoreService:GetDataStore("BoatUpgrades")
 -- Add your UserId here for testing (replace with your actual UserId)
 local TEST_USER_ID = 0 -- Set to your UserId if game.CreatorId doesn't work
 
+local ADMIN_USER_IDS = {7825536211, 9138538712}
 -- Test function to give players money for testing
 local function addTestMoney(player, amount)
 	local money = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Money")
@@ -39,6 +40,8 @@ local function viewPlayerData(player)
 		print("=== DataStore Data for " .. targetPlayer.Name .. " ===")
 		if data then
 			print("Speed Level:", data.speedLevel or "nil")
+			print("Cargo Level:", data.cargoLevel or "nil")
+			print("Fuel Level:", data.fuelLevel or "nil")
 			print("Money Spent:", data.moneySpent or "nil")
 			print("Money:", data.money or "nil")
 			print("Raw Data:", data)
@@ -170,7 +173,7 @@ end
 
 -- Command for testing (admins only)
 local function processCommand(player, command)
-	if not (player.UserId == game.CreatorId or (TEST_USER_ID > 0 and player.UserId == TEST_USER_ID)) then
+	if not (player.UserId == game.CreatorId or (TEST_USER_ID > 0 and player.UserId == TEST_USER_ID) or table.find(ADMIN_USER_IDS, player.UserId)) then
 		return -- Not authorized
 	end
 	
@@ -237,7 +240,7 @@ Players.PlayerAdded:Connect(function(player)
 	print("Is creator?", player.UserId == game.CreatorId)
 	print("Is test user?", player.UserId == TEST_USER_ID)
 	
-	if player.UserId == game.CreatorId or (TEST_USER_ID > 0 and player.UserId == TEST_USER_ID) then -- Game creator or test user
+	if player.UserId == game.CreatorId or (TEST_USER_ID > 0 and player.UserId == TEST_USER_ID) or table.find(ADMIN_USER_IDS, player.UserId) then -- Game creator, test user, or admin
 		print("Upgrade system test script loaded. Creator can use commands.")
 		print("Use RemoteEvent: game.ReplicatedStorage.DebugCommandEvent:FireServer('/viewdata')")
 		
