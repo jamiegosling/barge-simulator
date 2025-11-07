@@ -232,8 +232,14 @@ local function getUpgradeMultiplier(player, upgradeType)
 	
 	if not upgrades then return 1 end
 	
-	local levelKey = upgradeType .. "Level"
-	if not upgrades[levelKey] then return 1 end
+	-- Use proper key mapping
+	local keyMapping = {
+		speed = "speedLevel",
+		cargo_capacity = "cargoLevel",
+		fuel_capacity = "fuelLevel"
+	}
+	local levelKey = keyMapping[upgradeType]
+	if not levelKey or not upgrades[levelKey] then return 1 end
 	
 	local config = UPGRADE_CONFIG[upgradeType]
 	if not config then return 1 end
