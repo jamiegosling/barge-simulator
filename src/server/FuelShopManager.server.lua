@@ -76,6 +76,26 @@ local function purchaseFuel(player, fuelAmount)
 	-- Process purchase
 	money.Value -= cost
 	
+	-- Set purchase protection flag BEFORE updating fuel
+	local vehicleSeat = fuelInfo.playerBoat:FindFirstChildWhichIsA("VehicleSeat")
+	if vehicleSeat then
+		local boatScript = vehicleSeat:FindFirstChildWhichIsA("LocalScript")
+		if not boatScript then
+			boatScript = vehicleSeat:FindFirstChildWhichIsA("Script")
+		end
+		
+		if boatScript then
+			-- Create a temporary flag to prevent fuel override
+			local purchaseFlag = Instance.new("BoolValue")
+			purchaseFlag.Name = "FuelPurchaseInProgress"
+			purchaseFlag.Value = true
+			purchaseFlag.Parent = boatScript
+			
+			-- Remove flag after 3 seconds
+			game:GetService("Debris"):AddItem(purchaseFlag, 3)
+		end
+	end
+	
 	-- Update fuel on boat
 	local fuelAmountValue = fuelInfo.playerBoat:FindFirstChild("FuelAmount")
 	if fuelAmountValue then
@@ -116,9 +136,9 @@ local function purchaseFuel(player, fuelAmount)
 	
 	return {
 		success = true,
-		message = "Purchased " .. fuelAmount .. " fuel for £" .. cost .. "!",
-		newFuelLevel = fuelInfo.currentFuel + fuelAmount,
-		maxFuel = fuelInfo.maxFuel,
+		message = "Purchased " .. math.floor(fuelAmount) .. " fuel for £" .. math.floor(cost) .. "!",
+		newFuelLevel = math.floor(fuelInfo.currentFuel + fuelAmount),
+		maxFuel = math.floor(fuelInfo.maxFuel),
 		cost = cost
 	}
 end

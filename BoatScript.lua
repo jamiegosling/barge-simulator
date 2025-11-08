@@ -1,5 +1,6 @@
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Engine = script.Parent.Parent.BargeEngine.BodyThrust
 local SForce = script.Parent.Parent.BargeSteer.BodyAngularVelocity
@@ -31,12 +32,27 @@ local baseCurrentFuel = 100
 local currentFuel = baseCurrentFuel
 
 -- Fuel consumption variables
-local FUEL_CONSUMPTION_RATE = 0.1  -- Fuel consumed per stud traveled
+local FUEL_CONSUMPTION_RATE = 0.05  -- Fuel consumed per stud traveled
 local lastPosition = nil
 local totalDistanceTraveled = 0
 
 -- Track fuel-empty state to trigger throttle updates without input
 local outOfFuel = (currentFuel <= 0)
+
+-- Prevent UpdateFuel from overriding purchased fuel
+local function isFuelPurchaseInProgress()
+	local purchaseFlag = script:FindFirstChild("FuelPurchaseInProgress")
+	return purchaseFlag and purchaseFlag.Value == true
+end
+
+-- Listen for FuelAmount changes on the boat to update currentFuel directly
+local boat = DSeat.Parent
+local fuelAmount = boat:FindFirstChild("FuelAmount")
+if fuelAmount then
+	fuelAmount.Changed:Connect(function(newValue)
+		currentFuel = newValue
+	end)
+end
 
 -- Get upgrade values
 local OriginalMaxSpeed = script:FindFirstChild("OriginalMaxSpeed")
@@ -337,26 +353,29 @@ local function UpdateFuel()
 		maxFuel = baseMaxFuel
 	end
 	
-	-- Update current fuel - prioritize InitialFuel from script, then FuelAmount from boat
-	local initialFuelValue = script:FindFirstChild("InitialFuel")
-	if initialFuelValue then
-		print("⛽ UpdateFuel: Using InitialFuel from script:", initialFuelValue.Value)
-		currentFuel = initialFuelValue.Value
-		-- Update boat's FuelAmount to match
-		local boat = DSeat.Parent
-		local fuelAmount = boat:FindFirstChild("FuelAmount")
-		if fuelAmount then
-			fuelAmount.Value = currentFuel
-		end
+	-- Skip updating if fuel purchase is in progress
+	if isFuelPurchaseInProgress() then
+		return
+	end
+	
+	-- Update current fuel - prioritize FuelAmount from boat (live value), then InitialFuel from script
+	local boat = DSeat.Parent
+	local fuelAmount = boat:FindFirstChild("FuelAmount")
+	if fuelAmount then
+		currentFuel = fuelAmount.Value
 	else
-		-- Fallback to boat's FuelAmount if InitialFuel doesn't exist
-		local boat = DSeat.Parent
-		local fuelAmount = boat:FindFirstChild("FuelAmount")
-		if fuelAmount then
-			print("⛽ UpdateFuel: Using FuelAmount from boat:", fuelAmount.Value)
-			currentFuel = fuelAmount.Value
-		else
-			print("⛽ UpdateFuel: No fuel values found, keeping current:", currentFuel)
+		-- Fallback to InitialFuel if FuelAmount doesn't exist
+		local initialFuelValue = script:FindFirstChild("InitialFuel")
+		if initialFuelValue then
+			currentFuel = initialFuelValue.Value
+			-- Create FuelAmount on boat if it doesn't exist
+			local boat = DSeat.Parent
+			if not boat:FindFirstChild("FuelAmount") then
+				local newFuelAmount = Instance.new("NumberValue")
+				newFuelAmount.Name = "FuelAmount"
+				newFuelAmount.Value = currentFuel
+				newFuelAmount.Parent = boat
+			end
 		end
 	end
 end
@@ -387,6 +406,12 @@ local velocityConnection = RunService.Heartbeat:Connect(function()
 		local fuelAmount = boat:FindFirstChild("FuelAmount")
 		if fuelAmount then
 			fuelAmount.Value = currentFuel
+		end
+		
+		-- Also update InitialFuel to keep DataStore in sync
+		local initialFuelValue = script:FindFirstChild("InitialFuel")
+		if initialFuelValue then
+			initialFuelValue.Value = currentFuel
 		end
 		
 		-- If fuel-empty state changed, update throttle immediately
@@ -469,8 +494,16 @@ script.ChildAdded:Connect(function(child)
 		currentCargo = child.Value
 		UpdateCargo()
 	elseif child.Name == "InitialFuel" then
-		currentFuel = child.Value
-		UpdateFuel()
+		-- Only update if fuel purchase is not in progress
+		if not isFuelPurchaseInProgress() then
+			currentFuel = child.Value
+			-- Update boat's FuelAmount to match when InitialFuel changes
+			local boat = DSeat.Parent
+			local fuelAmount = boat:FindFirstChild("FuelAmount")
+			if fuelAmount then
+				fuelAmount.Value = currentFuel
+			end
+		end
 	end
 end)
 
