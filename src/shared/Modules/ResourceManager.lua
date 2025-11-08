@@ -4,6 +4,23 @@
 
 local ResourceManager = {}
 
+-- Pre-calculated distance matrix (in game units)
+-- Only this is needed since we're manually specifying all distances
+ResourceManager.DISTANCE_MATRIX = {
+	London = {
+		Leeds = 220, -- ~200 miles in game units
+		Bristol = 350  -- ~120 miles in game units
+	},
+	Leeds = {
+		London = 220,
+		Bristol = 280  -- ~170 miles in game units
+	},
+	Bristol = {
+		London = 350,
+		Leeds = 280
+	}
+}
+
 -- Resource types configuration
 ResourceManager.RESOURCE_TYPES = {
 	coal = {
@@ -68,6 +85,24 @@ ResourceManager.DESTINATIONS = {
 -- Initialize the resource manager
 function ResourceManager:Initialize()
 	self:StartResourceSimulation()
+end
+
+-- Calculate distance between two destinations
+function ResourceManager:GetDistance(from, to)
+	if from == to then
+		return 0
+	end
+	
+	-- Return distance from matrix
+	return self.DISTANCE_MATRIX[from] and self.DISTANCE_MATRIX[from][to] or 100
+end
+
+-- Get distance multiplier for pricing
+function ResourceManager:GetDistanceMultiplier(distance)
+	-- Base multiplier of 1.0, increases with distance
+	-- Formula: 1 + (distance / 1000) * 0.5
+	-- This means 1000 distance = 1.5x multiplier
+	return 1 + (distance / 1000) * 0.5
 end
 
 -- Get current stock of a resource at a destination
@@ -140,7 +175,7 @@ function ResourceManager:GetPrice(destination, resourceType)
 	return finalPrice
 end
 
--- Get all available jobs with dynamic pricing
+-- Get all available jobs with dynamic pricing and distance bonuses
 function ResourceManager:GetAvailableJobs()
 	local jobs = {}
 	local jobId = 1
@@ -155,8 +190,16 @@ function ResourceManager:GetAvailableJobs()
 					-- Check if destination has enough stock to create a job
 					local availableStock = self:GetStock(fromDestination, resourceType)
 					if availableStock > 50 then -- Minimum stock to create a job
-						local price = self:GetPrice(toDestination, resourceType)
+						-- Calculate base price from resource demand
+						local basePrice = self:GetPrice(toDestination, resourceType)
+						
+						-- Calculate distance and distance multiplier
+						local distance = self:GetDistance(fromDestination, toDestination)
+						local distanceMultiplier = self:GetDistanceMultiplier(distance)
+						
+						-- Calculate final reward with distance bonus
 						local loadSize = 50 -- Standard load size
+						local finalReward = math.floor(basePrice * distanceMultiplier)
 						
 						table.insert(jobs, {
 							id = jobId,
@@ -165,7 +208,10 @@ function ResourceManager:GetAvailableJobs()
 							to = toDestination,
 							cargo = resourceType,
 							loadSize = loadSize,
-							reward = price,
+							reward = finalReward,
+							distance = distance,
+							baseReward = basePrice,
+							distanceBonus = finalReward - basePrice,
 							availableStock = availableStock
 						})
 						jobId = jobId + 1
