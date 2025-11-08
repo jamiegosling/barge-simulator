@@ -21,19 +21,19 @@ local UPGRADE_CONFIG = {
 		baseCost = 2500,
 		costMultiplier = 1.5,
 		speedIncrease = 1.1,
-		maxLevel = 35
+		maxLevel = 20
 	},
 	cargo_capacity = {
 		baseCost = 2500,
 		costMultiplier = 1.5,
 		capacityIncrease = 1.1,
-		maxLevel = 35
+		maxLevel = 20
 	},
 	fuel_capacity = {
 		baseCost = 2500,
 		costMultiplier = 1.5,
 		capacityIncrease = 1.1,
-		maxLevel = 35
+		maxLevel = 20
 	}
 }
 

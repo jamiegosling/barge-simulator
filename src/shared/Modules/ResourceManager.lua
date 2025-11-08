@@ -9,15 +9,45 @@ local ResourceManager = {}
 ResourceManager.DISTANCE_MATRIX = {
 	London = {
 		Leeds = 220, -- ~200 miles in game units
-		Bristol = 350  -- ~120 miles in game units
+		Bristol = 350,  -- ~120 miles in game units
+		Boatyard = 300,
+		Newcastle = 350,
+		Exeter = 300
 	},
 	Leeds = {
 		London = 220,
-		Bristol = 280  -- ~170 miles in game units
+		Bristol = 280,  -- ~170 miles in game units
+		Boatyard = 280,
+		Newcastle = 200,
+		Exeter = 400
 	},
 	Bristol = {
 		London = 350,
-		Leeds = 280
+		Leeds = 280,
+		Boatyard = 280,
+		Newcastle = 280,
+		Exeter = 200
+	},
+	Boatyard = {
+		London = 300,
+		Leeds = 280,
+		Bristol = 280,
+		Newcastle = 280,
+		Exeter = 150
+	},
+	Newcastle = {
+		London = 350,
+		Leeds = 200,
+		Bristol = 280,
+		Boatyard = 280,
+		Exeter = 200
+	},
+	Exeter = {
+		Leeds = 400,
+		London = 300,
+		Bristol = 200,
+		Boatyard = 150,
+		Newcastle = 200
 	}
 }
 
@@ -74,6 +104,39 @@ ResourceManager.DESTINATIONS = {
 			coal = { consumptionRate = 3, currentStock = 300 },
 			grain = { consumptionRate = 1, currentStock = 800 },
 			steel = { consumptionRate = 2, currentStock = 300 }
+		},
+		produces = {
+			grain = { productionRate = 4 }, -- produces 4 units per minute
+			coal = { productionRate = 1 }
+		}
+	},
+	Boatyard = {
+		resources = {
+			coal = { consumptionRate = 3, currentStock = 300 },
+			grain = { consumptionRate = 1, currentStock = 800 },
+			steel = { consumptionRate = 5, currentStock = 300 }
+		},
+		produces = {
+			grain = { productionRate = 4 }, -- produces 4 units per minute
+			coal = { productionRate = 1 }
+		}
+	},
+	Newcastle = {
+		resources = {
+			coal = { consumptionRate = 3, currentStock = 300 },
+			grain = { consumptionRate = 1, currentStock = 300 },
+			steel = { consumptionRate = 10, currentStock = 300 }
+		},
+		produces = {
+			grain = { productionRate = 4 }, -- produces 4 units per minute
+			coal = { productionRate = 1 }
+		}
+	},
+	Exeter = {
+		resources = {
+			coal = { consumptionRate = 3, currentStock = 300 },
+			grain = { consumptionRate = 5, currentStock = 800 },
+			steel = { consumptionRate = 5, currentStock = 300 }
 		},
 		produces = {
 			grain = { productionRate = 4 }, -- produces 4 units per minute

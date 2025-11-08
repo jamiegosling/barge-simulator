@@ -11,7 +11,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 local FuelShopEvent = ReplicatedStorage:WaitForChild("FuelShopEvent")
 
 -- Fuel shop configuration
-local FUEL_COST_PER_UNIT = 5  -- Cost per unit of fuel
+local FUEL_COST_PER_UNIT = 3  -- Cost per unit of fuel
 
 -- Create fuel shop GUI
 local function createFuelShopGui()

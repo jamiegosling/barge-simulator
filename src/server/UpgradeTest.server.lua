@@ -17,7 +17,7 @@ local upgradeDataStore = DataStoreService:GetDataStore("BoatUpgrades")
 -- Add your UserId here for testing (replace with your actual UserId)
 local TEST_USER_ID = 0 -- Set to your UserId if game.CreatorId doesn't work
 
-local ADMIN_USER_IDS = {7825536211, 9138538712}
+local ADMIN_USER_IDS = {7825536211, 9138538712, 9905857870}
 -- Test function to give players money for testing
 local function addTestMoney(player, amount)
 	local money = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Money")

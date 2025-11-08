@@ -6,6 +6,7 @@ local JobStatus = ReplicatedStorage:WaitForChild("JobStatus")
 
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
 local ActiveJobs = {} -- player.UserId → {job = job table, loaded = boolean}
+local PlayersInZones = {} -- player.UserId → {zoneName = true, ...}
 
 -- Helper function to get player's boat cargo capacity
 local function GetPlayerBoatCargoCapacity(player)
@@ -90,6 +91,75 @@ local function IsPlayerInBoat(player)
 	return isOwner
 end
 
+-- Helper functions for zone tracking
+local function AddPlayerToZone(player, zoneName)
+	if not PlayersInZones[player.UserId] then
+		PlayersInZones[player.UserId] = {}
+	end
+	PlayersInZones[player.UserId][zoneName] = true
+	print("DEBUG: Player", player.Name, "entered zone:", zoneName)
+end
+
+local function RemovePlayerFromZone(player, zoneName)
+	if PlayersInZones[player.UserId] then
+		PlayersInZones[player.UserId][zoneName] = nil
+		print("DEBUG: Player", player.Name, "left zone:", zoneName)
+	end
+end
+
+local function IsPlayerInZone(player, zoneName)
+	return PlayersInZones[player.UserId] and PlayersInZones[player.UserId][zoneName] == true
+end
+
+local function CheckJobActionInCurrentZone(player)
+	local activeJob = ActiveJobs[player.UserId]
+	if not activeJob then return end
+	
+	local job = activeJob.job
+	
+	-- Check if player is in the pickup zone and needs to load
+	if not activeJob.loaded and IsPlayerInZone(player, job.from) then
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to load cargo!")
+			return
+		end
+		
+		activeJob.loaded = true
+		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
+		JobStatus:FireClient(player, "loaded", job)
+		print(player.Name .. " loaded cargo at " .. job.from .. " for job: " .. job.name)
+		return
+	end
+	
+	-- Check if player is in the delivery zone and ready to deliver
+	if activeJob.loaded and IsPlayerInZone(player, job.to) then
+		if not IsPlayerInBoat(player) then
+			JobMessage:FireClient(player, "You must be in your boat to deliver!")
+			return
+		end
+		
+		-- Update resources based on job completion
+		JobsManager:CompleteJob(job)
+		
+		player.leaderstats.Money.Value += job.reward
+		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
+		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
+		JobStatus:FireClient(player, "completed", job)
+		ActiveJobs[player.UserId] = nil
+		
+		-- Play visual effect based on zone
+		local zoneColors = {
+			Leeds = Color3.fromRGB(0, 170, 255),
+			London = Color3.fromRGB(255, 50, 50),
+			Bristol = Color3.fromRGB(255, 165, 0),
+			Exeter = Color3.fromRGB(255, 165, 0),
+			Newcastle = Color3.fromRGB(255, 165, 0),
+			Boatyard = Color3.fromRGB(255, 165, 0)
+		}
+		PlayDeliveryEffect(player, zoneColors[job.to] or Color3.fromRGB(255, 255, 255))
+	end
+end
+
 -- Helper function: play particle + sound effects for completed delivery
 local function PlayDeliveryEffect(player, color)
 	print("sparkle function")
@@ -153,6 +223,12 @@ Players.PlayerAdded:Connect(function(player)
 	money.Parent = stats
 end)
 
+-- Clean up when players leave
+Players.PlayerRemoving:Connect(function(player)
+	ActiveJobs[player.UserId] = nil
+	PlayersInZones[player.UserId] = nil
+end)
+
 -- Handle job selection
 JobPicked.OnServerEvent:Connect(function(player, jobId)
 	local job = JobsManager:GetJobById(jobId)
@@ -172,144 +248,99 @@ JobPicked.OnServerEvent:Connect(function(player, jobId)
 		print(player.Name .. " accepted job: " .. job.name) -- logging
 		JobMessage:FireClient(player, "Accepted job: " .. job.name .. ". Go to " .. job.from .. " to load your boat.")
 		JobStatus:FireClient(player, "accepted", job)
+		
+		-- Check if player is already in the correct zone for immediate action
+		CheckJobActionInCurrentZone(player)
 	end
 end)
 
--- Handle delivery zone trigger
+-- Handle delivery zone triggers with zone tracking
 workspace.LeedsDeliveryZone.Touched:Connect(function(hit)
 	local player = Players:GetPlayerFromCharacter(hit.Parent)
 	if not player then return end
-
-	local activeJob = ActiveJobs[player.UserId]
-	if not activeJob then return end
-
-	local job = activeJob.job
 	
-	-- Handle pickup logic (loading cargo)
-	if job.from == "Leeds" and not activeJob.loaded then
-		if not IsPlayerInBoat(player) then
-			JobMessage:FireClient(player, "You must be in your boat to load cargo!")
-			return
-		end
-		
-		activeJob.loaded = true
-		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
-		JobStatus:FireClient(player, "loaded", job)
-		print(player.Name .. " loaded cargo at Leeds for job: " .. job.name)
-		return
-	end
+	AddPlayerToZone(player, "Leeds")
+	CheckJobActionInCurrentZone(player)
+end)
+
+workspace.LeedsDeliveryZone.TouchEnded:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
 	
-	-- Handle delivery logic
-	if job.to == "Leeds" then
-		if not activeJob.loaded then
-			JobMessage:FireClient(player, "You need to load your boat at " .. job.from .. " first!")
-			return
-		end
-		
-		if not IsPlayerInBoat(player) then
-			JobMessage:FireClient(player, "You must be in your boat to deliver!")
-			return
-		end
-		
-		-- Update resources based on job completion
-		JobsManager:CompleteJob(job)
-		
-		player.leaderstats.Money.Value += job.reward
-		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
-		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
-		JobStatus:FireClient(player, "completed", job)
-		ActiveJobs[player.UserId] = nil
-		-- 🎆 Play visual + audio effect
-		PlayDeliveryEffect(player, Color3.fromRGB(0, 170, 255)) -- blue for Leeds
-	end
+	RemovePlayerFromZone(player, "Leeds")
 end)
 
 workspace.LondonDeliveryZone.Touched:Connect(function(hit)
 	local player = Players:GetPlayerFromCharacter(hit.Parent)
 	if not player then return end
-
-	local activeJob = ActiveJobs[player.UserId]
-	if not activeJob then return end
-
-	local job = activeJob.job
 	
-	-- Handle pickup logic (loading cargo)
-	if job.from == "London" and not activeJob.loaded then
-		if not IsPlayerInBoat(player) then
-			JobMessage:FireClient(player, "You must be in your boat to load cargo!")
-			return
-		end
-		
-		activeJob.loaded = true
-		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
-		JobStatus:FireClient(player, "loaded", job)
-		print(player.Name .. " loaded cargo at London for job: " .. job.name)
-		return
-	end
+	AddPlayerToZone(player, "London")
+	CheckJobActionInCurrentZone(player)
+end)
+
+workspace.LondonDeliveryZone.TouchEnded:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
 	
-	-- Handle delivery logic
-	if job.to == "London" then
-		if not activeJob.loaded then
-			JobMessage:FireClient(player, "You need to load your boat at " .. job.from .. " first!")
-			return
-		end
-		
-		if not IsPlayerInBoat(player) then
-			JobMessage:FireClient(player, "You must be in your boat to deliver!")
-			return
-		end
-		
-		player.leaderstats.Money.Value += job.reward
-		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
-		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
-		JobStatus:FireClient(player, "completed", job)
-		ActiveJobs[player.UserId] = nil
-		-- 🎆 Play visual + audio effect
-		PlayDeliveryEffect(player, Color3.fromRGB(355, 50, 50)) -- red
-	end
+	RemovePlayerFromZone(player, "London")
 end)
 
 workspace.BristolDeliveryZone.Touched:Connect(function(hit)
 	local player = Players:GetPlayerFromCharacter(hit.Parent)
 	if not player then return end
-
-	local activeJob = ActiveJobs[player.UserId]
-	if not activeJob then return end
-
-	local job = activeJob.job
 	
-	-- Handle pickup logic (loading cargo)
-	if job.from == "Bristol" and not activeJob.loaded then
-		if not IsPlayerInBoat(player) then
-			JobMessage:FireClient(player, "You must be in your boat to load cargo!")
-			return
-		end
-		
-		activeJob.loaded = true
-		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
-		JobStatus:FireClient(player, "loaded", job)
-		print(player.Name .. " loaded cargo at Bristol for job: " .. job.name)
-		return
-	end
+	AddPlayerToZone(player, "Bristol")
+	CheckJobActionInCurrentZone(player)
+end)
+
+workspace.BristolDeliveryZone.TouchEnded:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
 	
-	-- Handle delivery logic
-	if job.to == "Bristol" then
-		if not activeJob.loaded then
-			JobMessage:FireClient(player, "You need to load your boat at " .. job.from .. " first!")
-			return
-		end
-		
-		if not IsPlayerInBoat(player) then
-			JobMessage:FireClient(player, "You must be in your boat to deliver!")
-			return
-		end
-		
-		player.leaderstats.Money.Value += job.reward
-		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
-		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
-		JobStatus:FireClient(player, "completed", job)
-		ActiveJobs[player.UserId] = nil
-		-- 🎆 Play visual + audio effect
-		PlayDeliveryEffect(player, Color3.fromRGB(255, 165, 0)) -- orange for Bristol
-	end
+	RemovePlayerFromZone(player, "Bristol")
+end)
+
+workspace.ExeterDeliveryZone.Touched:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
+	
+	AddPlayerToZone(player, "Exeter")
+	CheckJobActionInCurrentZone(player)
+end)
+
+workspace.ExeterDeliveryZone.TouchEnded:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
+	
+	RemovePlayerFromZone(player, "Exeter")
+end)
+
+workspace.NewcastleDeliveryZone.Touched:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
+	
+	AddPlayerToZone(player, "Newcastle")
+	CheckJobActionInCurrentZone(player)
+end)
+
+workspace.NewcastleDeliveryZone.TouchEnded:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
+	
+	RemovePlayerFromZone(player, "Newcastle")
+end)
+
+workspace.BoatyardDeliveryZone.Touched:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
+	
+	AddPlayerToZone(player, "Boatyard")
+	CheckJobActionInCurrentZone(player)
+end)
+
+workspace.BoatyardDeliveryZone.TouchEnded:Connect(function(hit)
+	local player = Players:GetPlayerFromCharacter(hit.Parent)
+	if not player then return end
+	
+	RemovePlayerFromZone(player, "Boatyard")
 end)

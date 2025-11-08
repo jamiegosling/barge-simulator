@@ -13,7 +13,7 @@ DSeat.HeadsUpDisplay = false
 -- ==================== VARIABLES ==================== --
 local currentSpeed = 0
 local movementDirection = 0
-local baseMaxSpeed = 20000
+local baseMaxSpeed = 18000
 local maxSpeed = baseMaxSpeed
 SteerSpeed = 500
 BaseDensity = .1
@@ -32,7 +32,7 @@ local baseCurrentFuel = 100
 local currentFuel = baseCurrentFuel
 
 -- Fuel consumption variables
-local FUEL_CONSUMPTION_RATE = 0.05  -- Fuel consumed per stud traveled
+local FUEL_CONSUMPTION_RATE = 0.025  -- Fuel consumed per stud traveled
 local lastPosition = nil
 local totalDistanceTraveled = 0
 
@@ -320,7 +320,7 @@ local function UpdateThrottle()
 	-- Reduce speed to original if fuel is empty
 	local effectiveMaxSpeed = maxSpeed
 	if currentFuel <= 0 then
-		effectiveMaxSpeed = baseMaxSpeed  -- Use original base speed without multipliers
+		effectiveMaxSpeed = baseMaxSpeed * 0.75  -- Half of original speed
 	end
 
 	Engine.Force = Vector3.new(0, 0, effectiveMaxSpeed * DSeat.ThrottleFloat)
