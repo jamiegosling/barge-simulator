@@ -175,6 +175,14 @@ function ResourceManager:GetPrice(destination, resourceType)
 	return finalPrice
 end
 
+-- Cargo size configurations
+ResourceManager.CARGO_SIZES = {
+	{size = 100, multiplier = 1.0, label = "Small"},
+	{size = 110, multiplier = 1.8, label = "Medium"},
+	{size = 120, multiplier = 2.5, label = "Large"},
+	{size = 130, multiplier = 3.2, label = "Extra Large"}
+}
+
 -- Get all available jobs with dynamic pricing and distance bonuses
 function ResourceManager:GetAvailableJobs()
 	local jobs = {}
@@ -197,24 +205,34 @@ function ResourceManager:GetAvailableJobs()
 						local distance = self:GetDistance(fromDestination, toDestination)
 						local distanceMultiplier = self:GetDistanceMultiplier(distance)
 						
-						-- Calculate final reward with distance bonus
-						local loadSize = 50 -- Standard load size
-						local finalReward = math.floor(basePrice * distanceMultiplier)
-						
-						table.insert(jobs, {
-							id = jobId,
-							name = string.format("%s to %s", self.RESOURCE_TYPES[resourceType].name, toDestination),
-							from = fromDestination,
-							to = toDestination,
-							cargo = resourceType,
-							loadSize = loadSize,
-							reward = finalReward,
-							distance = distance,
-							baseReward = basePrice,
-							distanceBonus = finalReward - basePrice,
-							availableStock = availableStock
-						})
-						jobId = jobId + 1
+						-- Generate jobs with different cargo sizes
+						for _, cargoConfig in ipairs(self.CARGO_SIZES) do
+							-- Only create job if enough stock available
+							if availableStock >= cargoConfig.size then
+								local loadSize = cargoConfig.size
+								local cargoMultiplier = cargoConfig.multiplier
+								
+								-- Calculate final reward: base price * distance * cargo size multiplier
+								local finalReward = math.floor(basePrice * distanceMultiplier * cargoMultiplier)
+								
+								table.insert(jobs, {
+									id = jobId,
+									name = string.format("%s to %s", self.RESOURCE_TYPES[resourceType].name, toDestination),
+									from = fromDestination,
+									to = toDestination,
+									cargo = resourceType,
+									loadSize = loadSize,
+									cargoSize = loadSize, -- Required cargo capacity for this job
+									cargoLabel = cargoConfig.label,
+									reward = finalReward,
+									distance = distance,
+									baseReward = basePrice,
+									distanceBonus = finalReward - basePrice,
+									availableStock = availableStock
+								})
+								jobId = jobId + 1
+							end
+						end
 					end
 				end
 			end

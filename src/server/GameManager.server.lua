@@ -4,9 +4,44 @@ local JobsManager = require(ReplicatedStorage.Shared.Modules.JobsManager)
 local JobMessage = ReplicatedStorage:WaitForChild("JobMessage")
 local JobStatus = ReplicatedStorage:WaitForChild("JobStatus")
 
-
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
 local ActiveJobs = {} -- player.UserId → {job = job table, loaded = boolean}
+
+-- Helper function to get player's boat cargo capacity
+local function GetPlayerBoatCargoCapacity(player)
+	-- Find the player's boat in workspace
+	local playerBoats = workspace:FindFirstChild("PlayerBoats")
+	if not playerBoats then return 0 end
+	
+	for _, boat in ipairs(playerBoats:GetChildren()) do
+		local ownerTag = boat:FindFirstChild("Owner")
+		if ownerTag and tostring(ownerTag.Value) == tostring(player.UserId) then
+			-- Found the player's boat, now get cargo capacity
+			local boatScript = boat:FindFirstChild("VehicleSeat") and boat.VehicleSeat:FindFirstChild("BoatScript")
+			if boatScript then
+				local originalCargo = boatScript:FindFirstChild("OriginalCargoCapacity")
+				local cargoMultiplier = boatScript:FindFirstChild("CargoMultiplier")
+				
+				if originalCargo and cargoMultiplier then
+					return originalCargo.Value * cargoMultiplier.Value
+				elseif originalCargo then
+					return originalCargo.Value
+				end
+			end
+			
+			-- Fallback: check boat directly
+			local maxCargo = boat:FindFirstChild("MaxCargo")
+			if maxCargo then
+				return maxCargo.Value
+			end
+			
+			-- Default base cargo capacity
+			return 100
+		end
+	end
+	
+	return 0 -- No boat found
+end
 
 -- Helper function to check if player is in their boat
 local function IsPlayerInBoat(player)
@@ -122,6 +157,17 @@ end)
 JobPicked.OnServerEvent:Connect(function(player, jobId)
 	local job = JobsManager:GetJobById(jobId)
 	if job then
+		-- Check if player's boat has enough cargo capacity
+		local playerCargoCapacity = GetPlayerBoatCargoCapacity(player)
+		local requiredCargoSize = job.cargoSize or job.loadSize or 50
+		
+		if playerCargoCapacity < requiredCargoSize then
+			-- Boat doesn't have enough cargo capacity
+			print(player.Name .. " tried to pick job requiring " .. requiredCargoSize .. " cargo, but only has " .. playerCargoCapacity)
+			JobMessage:FireClient(player, "⚠️ Your boat's cargo capacity (" .. math.floor(playerCargoCapacity) .. ") is too small for this job (requires " .. math.floor(requiredCargoSize) .. "). Upgrade your boat!")
+			return
+		end
+		
 		ActiveJobs[player.UserId] = {job = job, loaded = false}
 		print(player.Name .. " accepted job: " .. job.name) -- logging
 		JobMessage:FireClient(player, "Accepted job: " .. job.name .. ". Go to " .. job.from .. " to load your boat.")

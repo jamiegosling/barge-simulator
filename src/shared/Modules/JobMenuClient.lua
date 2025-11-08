@@ -180,11 +180,11 @@ local function createJobButton(job)
 	local jobDetails = newButton:FindFirstChild("JobDetails")
 	
 	if jobTitle then
-		jobTitle.Text = "📦 " .. job.name
+		jobTitle.Text = "📦 " .. job.name .. " (" .. (job.cargoLabel or "Standard") .. ")"
 	end
 	
 	if jobDetails then
-		jobDetails.Text = string.format("From: %s → To: %s  |  💰 £%d", job.from, job.to, job.reward)
+		jobDetails.Text = string.format("From: %s → To: %s  |  Cargo: %d  |  💰 £%d", job.from, job.to, job.cargoSize or job.loadSize, job.reward)
 	end
 	
 	newButton.Parent = scrollFrame
@@ -193,10 +193,7 @@ local function createJobButton(job)
 		print("Selected job:", job.name)
 		JobPicked:FireServer(job.id)
 		
-		-- Set job state and update UI
-		isOnJob = true
-		updatePickButtonVisibility()
-		
+		-- Don't set isOnJob here - wait for server validation via JobStatus event
 		-- Hide menu
 		jobMenuGui.Enabled = false
 	end)
