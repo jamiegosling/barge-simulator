@@ -353,6 +353,56 @@ local function updateUpgradeInfo(upgradeType)
 	UpgradeEvent:FireServer("getInfo", upgradeType)
 end
 
+-- Update all upgrade information (for dynamic updates)
+local function updateAllUpgradeInfo()
+	if shopGui.Enabled then
+		updateUpgradeInfo("speed")
+		updateUpgradeInfo("cargo_capacity")
+		updateUpgradeInfo("fuel_capacity")
+	end
+end
+
+-- Monitor player level changes for dynamic GUI updates
+local function setupLevelMonitoring()
+	local upgradeStats = player:WaitForChild("UpgradeStats", 10)
+	if not upgradeStats then return end
+	
+	-- Monitor speed level changes
+	local speedLevel = upgradeStats:WaitForChild("SpeedLevel", 5)
+	if speedLevel then
+		speedLevel.Changed:Connect(function(newLevel)
+			if shopGui.Enabled and currentUpgradeType == "speed" then
+				updateUpgradeInfo("speed")
+				print("🚀 Speed level changed to:", newLevel, "- updating GUI")
+			end
+		end)
+	end
+	
+	-- Monitor cargo level changes
+	local cargoLevel = upgradeStats:WaitForChild("CargoLevel", 5)
+	if cargoLevel then
+		cargoLevel.Changed:Connect(function(newLevel)
+			if shopGui.Enabled and currentUpgradeType == "cargo_capacity" then
+				updateUpgradeInfo("cargo_capacity")
+				print("📦 Cargo level changed to:", newLevel, "- updating GUI")
+			end
+		end)
+	end
+	
+	-- Monitor fuel level changes
+	local fuelLevel = upgradeStats:WaitForChild("FuelLevel", 5)
+	if fuelLevel then
+		fuelLevel.Changed:Connect(function(newLevel)
+			if shopGui.Enabled and currentUpgradeType == "fuel_capacity" then
+				updateUpgradeInfo("fuel_capacity")
+				print("⛽ Fuel level changed to:", newLevel, "- updating GUI")
+			end
+		end)
+	end
+	
+	print("✅ Level monitoring setup complete")
+end
+
 -- Switch to specific upgrade tab
 local function switchToTab(upgradeType)
 	-- Hide all frames
@@ -437,7 +487,7 @@ UpgradeEvent.OnClientEvent:Connect(function(action, data)
 			
 			-- Update displays
 			updateMoneyDisplay()
-			updateUpgradeInfo()
+			updateAllUpgradeInfo()  -- Update all tabs after purchase
 		else
 			-- Show error message
 			local message = Instance.new("TextLabel")
@@ -465,6 +515,12 @@ ShopEvent.OnClientEvent:Connect(function(action)
 	if action == "openShop" then
 		shopGui.Enabled = true
 		updateMoneyDisplay()
+		
+		-- Setup level monitoring if not already done
+		coroutine.wrap(setupLevelMonitoring)()
+		
+		-- Update all upgrade info when shop opens
+		updateAllUpgradeInfo()
 		switchToTab(currentUpgradeType)
 	end
 end)
@@ -519,3 +575,6 @@ coroutine.wrap(function()
 end)()
 
 print("Shop client initialized")
+
+-- Setup level monitoring when script starts (for dynamic updates)
+coroutine.wrap(setupLevelMonitoring)()
