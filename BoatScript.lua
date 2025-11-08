@@ -30,6 +30,14 @@ local maxFuel = baseMaxFuel
 local baseCurrentFuel = 100
 local currentFuel = baseCurrentFuel
 
+-- Fuel consumption variables
+local FUEL_CONSUMPTION_RATE = 0.1  -- Fuel consumed per stud traveled
+local lastPosition = nil
+local totalDistanceTraveled = 0
+
+-- Track fuel-empty state to trigger throttle updates without input
+local outOfFuel = (currentFuel <= 0)
+
 -- Get upgrade values
 local OriginalMaxSpeed = script:FindFirstChild("OriginalMaxSpeed")
 local SpeedMultiplier = script:FindFirstChild("SpeedMultiplier")
@@ -39,6 +47,12 @@ local InitialCargo = script:FindFirstChild("InitialCargo")
 local OriginalFuelCapacity = script:FindFirstChild("OriginalFuelCapacity")  -- Fixed: match UpgradeManager  
 local FuelMultiplier = script:FindFirstChild("FuelMultiplier")
 local InitialFuel = script:FindFirstChild("InitialFuel")
+local FuelConsumptionRate = script:FindFirstChild("FuelConsumptionRate")
+
+-- Set fuel consumption rate
+if FuelConsumptionRate then
+	FUEL_CONSUMPTION_RATE = FuelConsumptionRate.Value
+end
 
 -- Set initial speed values
 if OriginalMaxSpeed then
@@ -76,8 +90,10 @@ else
 end
 if InitialFuel then
 	currentFuel = InitialFuel.Value
+	print("⛽ Initial fuel set from InitialFuel:", currentFuel)
 else
 	currentFuel = baseCurrentFuel
+	print("⛽ Initial fuel set to default:", currentFuel)
 end
 
 -- ==================== GUI VARIABLES ==================== --
@@ -138,7 +154,7 @@ local function createGUIForPlayer(player)
 	cargoLabel.Size = UDim2.new(1, -10, 0, 30)
 	cargoLabel.Position = UDim2.new(0, 5, 0, 35)
 	cargoLabel.BackgroundTransparency = 1
-	cargoLabel.Text = "📦 Cargo: 0/100"
+	cargoLabel.Text = "📦 Max Cargo: 100"
 	cargoLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
 	cargoLabel.TextSize = 16
 	cargoLabel.Font = Enum.Font.SourceSans
@@ -151,7 +167,7 @@ local function createGUIForPlayer(player)
 	fuelLabel.Size = UDim2.new(1, -10, 0, 30)
 	fuelLabel.Position = UDim2.new(0, 5, 0, 65)
 	fuelLabel.BackgroundTransparency = 1
-	fuelLabel.Text = "⛽ Fuel: 100%"
+	fuelLabel.Text = "⛽ Fuel: 100/200"
 	fuelLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 	fuelLabel.TextSize = 16
 	fuelLabel.Font = Enum.Font.SourceSans
@@ -242,12 +258,12 @@ local function updateHUD()
 		-- Update cargo and fuel
 		if cargoLabel and fuelLabel then
 			local values = getUpgradeValues()
-			cargoLabel.Text = "📦 Cargo: " .. values.currentCargo .. "/" .. values.maxCargo
+			cargoLabel.Text = "📦 Max Cargo: " .. math.floor(values.maxCargo)
 
-			local fuelPercent = math.floor((values.currentFuel / values.maxFuel) * 100)
-			fuelLabel.Text = "⛽ Fuel: " .. fuelPercent .. "%"
+			fuelLabel.Text = "⛽ Fuel: " .. math.floor(values.currentFuel) .. "/" .. math.floor(values.maxFuel)
 
 			-- Change fuel color based on level
+			local fuelPercent = (values.currentFuel / values.maxFuel) * 100
 			if fuelPercent <= 20 then
 				fuelLabel.TextColor3 = Color3.fromRGB(255, 100, 100) -- Red
 			elseif fuelPercent <= 50 then
@@ -285,7 +301,13 @@ local function UpdateThrottle()
 		maxSpeed = baseMaxSpeed
 	end
 
-	Engine.Force = Vector3.new(0, 0, maxSpeed * DSeat.ThrottleFloat)
+	-- Reduce speed to original if fuel is empty
+	local effectiveMaxSpeed = maxSpeed
+	if currentFuel <= 0 then
+		effectiveMaxSpeed = baseMaxSpeed  -- Use original base speed without multipliers
+	end
+
+	Engine.Force = Vector3.new(0, 0, effectiveMaxSpeed * DSeat.ThrottleFloat)
 	UpdateSteering(currentSpeed)
 end
 
@@ -315,11 +337,27 @@ local function UpdateFuel()
 		maxFuel = baseMaxFuel
 	end
 	
-	-- Update current fuel from boat if it exists
-	local boat = DSeat.Parent
-	local fuelAmount = boat:FindFirstChild("FuelAmount")
-	if fuelAmount then
-		currentFuel = fuelAmount.Value
+	-- Update current fuel - prioritize InitialFuel from script, then FuelAmount from boat
+	local initialFuelValue = script:FindFirstChild("InitialFuel")
+	if initialFuelValue then
+		print("⛽ UpdateFuel: Using InitialFuel from script:", initialFuelValue.Value)
+		currentFuel = initialFuelValue.Value
+		-- Update boat's FuelAmount to match
+		local boat = DSeat.Parent
+		local fuelAmount = boat:FindFirstChild("FuelAmount")
+		if fuelAmount then
+			fuelAmount.Value = currentFuel
+		end
+	else
+		-- Fallback to boat's FuelAmount if InitialFuel doesn't exist
+		local boat = DSeat.Parent
+		local fuelAmount = boat:FindFirstChild("FuelAmount")
+		if fuelAmount then
+			print("⛽ UpdateFuel: Using FuelAmount from boat:", fuelAmount.Value)
+			currentFuel = fuelAmount.Value
+		else
+			print("⛽ UpdateFuel: No fuel values found, keeping current:", currentFuel)
+		end
 	end
 end
 
@@ -332,6 +370,33 @@ local velocityConnection = RunService.Heartbeat:Connect(function()
 	local forwardSpeed = relativeVelocity.X
 
 	currentSpeed = forwardSpeed
+
+	-- Fuel consumption based on distance traveled
+	local currentPosition = Base.Position
+	if lastPosition and DSeat.Occupant and math.abs(forwardSpeed) > MIN_STEER_SPEED then
+		local distance = (currentPosition - lastPosition).Magnitude
+		totalDistanceTraveled = totalDistanceTraveled + distance
+		
+		-- Consume fuel
+		local fuelToConsume = distance * FUEL_CONSUMPTION_RATE
+		local previousFuel = currentFuel
+		currentFuel = math.max(0, currentFuel - fuelToConsume)
+		
+		-- Update fuel amount on boat if it exists
+		local boat = DSeat.Parent
+		local fuelAmount = boat:FindFirstChild("FuelAmount")
+		if fuelAmount then
+			fuelAmount.Value = currentFuel
+		end
+		
+		-- If fuel-empty state changed, update throttle immediately
+		local nowOutOfFuel = (currentFuel <= 0)
+		if nowOutOfFuel ~= outOfFuel then
+			outOfFuel = nowOutOfFuel
+			UpdateThrottle()
+		end
+	end
+	lastPosition = currentPosition
 
 	local newDirection = 0
 	if forwardSpeed > MIN_STEER_SPEED then
@@ -359,6 +424,10 @@ local seatConnection = DSeat:GetPropertyChangedSignal("Occupant"):Connect(functi
 		local player = Players:GetPlayerFromCharacter(DSeat.Occupant.Parent)
 		if player then
 			print("   Player found:", player.Name)
+			print("   Current fuel before UpdateFuel:", currentFuel)
+			-- Update fuel values when player sits down
+			UpdateFuel()
+			print("   Current fuel after UpdateFuel:", currentFuel)
 			createGUIForPlayer(player)
 		end
 	else

@@ -40,11 +40,18 @@ local UPGRADE_CONFIG = {
 -- Player upgrade data cache
 local playerUpgrades = {}
 
--- Auto-save control (can be modified by test script)
-local autoSaveEnabled = true
+-- Track which players are being saved to prevent duplicates
+local savingPlayers = {}
 
 -- Player-specific auto-save control (for testing)
 local playersWithDisabledAutoSave = {}
+
+-- Track fuel changes for smart saving
+local fuelChangeTimestamps = {}
+
+-- Check if running in Studio
+local IS_STUDIO = game:GetService("RunService"):IsStudio()
+local AUTO_SAVE_INTERVAL = IS_STUDIO and 10 or 60  -- 10 seconds in Studio, 60 in production
 
 -- Function to get auto-save status
 function getAutoSaveEnabled()
@@ -103,7 +110,8 @@ local function initializePlayerUpgrades(player)
 			cargoLevel = 1,
 			fuelLevel = 1,
 			moneySpent = 0,
-			money = 0  -- Add money persistence
+			money = 0,  -- Add money persistence
+			currentFuel = 100  -- Add current fuel persistence
 		}
 	end
 
@@ -118,6 +126,11 @@ local function initializePlayerUpgrades(player)
 		if not data[dataKey] then
 			data[dataKey] = 1
 		end
+	end
+	
+	-- Add currentFuel if missing
+	if not data.currentFuel then
+		data.currentFuel = 100
 	end
 	
 	playerUpgrades[userId] = data
@@ -195,21 +208,60 @@ local function savePlayerUpgrades(player)
 		end
 	end
 	
+	-- Debug: Show what we're about to save
+	print("DEBUG: About to save for", player.Name)
+	print("  - upgrades table exists:", upgrades ~= nil)
+	if upgrades then
+		print("  - currentFuel:", upgrades.currentFuel)
+		print("  - money:", upgrades.money)
+		print("  - speedLevel:", upgrades.speedLevel)
+	end
+	
+	-- Note: Fuel is now saved in BoatSpawner before boat destruction
+	-- to ensure it's available when PlayerRemoving fires
+	
 	-- Check if we're in Studio
 	local isStudio = game:GetService("RunService"):IsStudio()
 	
+	print("DEBUG: Attempting DataStore save for", player.Name)
+	print("  - userId:", userId)
+	print("  - isStudio:", isStudio)
+	
+	-- Use UpdateAsync to prevent race conditions
 	local success, errorMessage = pcall(function()
-		upgradeDataStore:SetAsync(userId, upgrades)
+		upgradeDataStore:UpdateAsync(userId, function(oldData)
+			-- If oldData exists, merge critical fields (to preserve any concurrent updates)
+			-- but always use our current upgrades data as the source of truth
+			return upgrades
+		end)
 	end)
 	
+	print("DEBUG: DataStore save result - success:", success)
 	if not success then
+		print("DEBUG: Error message:", errorMessage)
 		if isStudio and string.find(tostring(errorMessage), "StudioAccessToApisNotAllowed") then
 			print("Studio mode - skipping save for", player.Name)
 		else
 			warn("Failed to save upgrade data for " .. player.Name .. ": " .. tostring(errorMessage))
 		end
 	else
-		print("Saved upgrades and money for", player.Name, "- Speed Level:", upgrades.speedLevel, "Cargo Level:", upgrades.cargoLevel, "Fuel Level:", upgrades.fuelLevel, "Money: £" .. (upgrades.money or 0))
+		print("✅ Saved upgrades and money for", player.Name, "- Speed Level:", upgrades.speedLevel, "Cargo Level:", upgrades.cargoLevel, "Fuel Level:", upgrades.fuelLevel, "Current Fuel:", upgrades.currentFuel, "Money: £" .. (upgrades.money or 0))
+		
+		-- Clear fuel change timestamp after successful save
+		fuelChangeTimestamps[userId] = nil
+		
+		-- Verify the save by reading back immediately (only in Studio for debugging)
+		if IS_STUDIO then
+			local verifySuccess, verifyData = pcall(function()
+				return upgradeDataStore:GetAsync(userId)
+			end)
+			
+			if verifySuccess then
+				print("DEBUG: Verification - currentFuel in DataStore:", verifyData.currentFuel)
+			else
+				print("DEBUG: Verification failed:", verifyData)
+			end
+		end
 	end
 end
 
@@ -301,6 +353,64 @@ local function updateBoatUpgrade(boat, player, upgradeType)
 	end
 end
 
+-- Set InitialFuel from DataStore (called during boat spawning)
+local function setInitialFuel(boat, player)
+	local userId = tostring(player.UserId)
+	local upgrades = playerUpgrades[userId]
+	
+	print("Attempting to set initial fuel for", player.Name)
+	if upgrades then
+		print("Found upgrades data, currentFuel:", upgrades.currentFuel)
+	else
+		print("No upgrades data found for", player.Name)
+		return
+	end
+	
+	if upgrades.currentFuel then
+		-- Find the VehicleSeat in the boat
+		local vehicleSeat = boat:FindFirstChildWhichIsA("VehicleSeat")
+		if vehicleSeat then
+			-- Look for the custom boat script in the seat
+			local boatScript = vehicleSeat:FindFirstChildWhichIsA("LocalScript")
+			if not boatScript then
+				-- Also check for regular Script
+				boatScript = vehicleSeat:FindFirstChildWhichIsA("Script")
+			end
+			
+			if boatScript then
+				-- Remove old InitialFuel if it exists
+				local oldInitialFuel = boatScript:FindFirstChild("InitialFuel")
+				if oldInitialFuel then
+					oldInitialFuel:Destroy()
+				end
+				
+				-- Create new InitialFuel value
+				local initialFuelValue = Instance.new("NumberValue")
+				initialFuelValue.Name = "InitialFuel"
+				initialFuelValue.Value = upgrades.currentFuel
+				initialFuelValue.Parent = boatScript
+				
+				-- Also update the FuelAmount on the boat itself
+				local fuelAmount = boat:FindFirstChild("FuelAmount")
+				if fuelAmount then
+					fuelAmount.Value = upgrades.currentFuel
+					print("Updated boat FuelAmount to:", fuelAmount.Value)
+				else
+					print("No FuelAmount found on boat")
+				end
+				
+				print("Set InitialFuel for", player.Name, "to:", upgrades.currentFuel)
+			else
+				print("No boat script found in VehicleSeat")
+			end
+		else
+			print("No VehicleSeat found in boat")
+		end
+	else
+		print("No currentFuel found in upgrades data for", player.Name)
+	end
+end
+
 -- Update boat speed with current upgrades (backward compatibility)
 local function updateBoatSpeed(boat, player)
 	updateBoatUpgrade(boat, player, "speed")
@@ -377,15 +487,27 @@ local function purchaseUpgrade(player, upgradeType)
 	}
 end
 
+-- Function to update fuel and mark for saving
+local function updatePlayerFuel(player, newFuelValue)
+	local userId = tostring(player.UserId)
+	local upgrades = playerUpgrades[userId]
+	
+	if upgrades then
+		upgrades.currentFuel = newFuelValue
+		fuelChangeTimestamps[userId] = tick()  -- Mark time of change
+	end
+end
+
 -- Player events
 Players.PlayerAdded:Connect(initializePlayerUpgrades)
 
-Players.PlayerRemoving:Connect(savePlayerUpgrades)
+-- Note: PlayerRemoving save is now handled by BoatSpawner to ensure fuel is saved before boat destruction
+-- Players.PlayerRemoving:Connect(savePlayerUpgrades)
 
--- Auto-save every 60 seconds (respects player-specific settings)
+-- Auto-save (10 seconds in Studio, 60 in production)
 coroutine.wrap(function()
 	while true do
-		task.wait(60)
+		task.wait(AUTO_SAVE_INTERVAL)
 		for _, player in ipairs(Players:GetPlayers()) do
 			-- Only save if auto-save is not disabled for this player
 			if not isPlayerAutoSaveDisabled(player) then
@@ -395,11 +517,54 @@ coroutine.wrap(function()
 	end
 end)()
 
+-- Studio-specific: Additional save on fuel changes (every 5 seconds if fuel changed)
+if IS_STUDIO then
+	coroutine.wrap(function()
+		while true do
+			task.wait(5)
+			for _, player in ipairs(Players:GetPlayers()) do
+				local userId = tostring(player.UserId)
+				-- If fuel changed in last 5 seconds and not disabled, save it
+				if fuelChangeTimestamps[userId] and not isPlayerAutoSaveDisabled(player) then
+					local timeSinceChange = tick() - fuelChangeTimestamps[userId]
+					if timeSinceChange < 5 then
+						print("⛽ Studio: Saving fuel for", player.Name, "(changed recently)")
+						savePlayerUpgrades(player)
+					end
+				end
+			end
+		end
+	end)()
+end
+
+-- Bind to game close to save all player data (important for Studio testing)
+game:BindToClose(function()
+	print("🛑 Game closing - saving all player data...")
+	for _, player in ipairs(Players:GetPlayers()) do
+		if not isPlayerAutoSaveDisabled(player) then
+			savePlayerUpgrades(player)
+		end
+	end
+	-- Give time for saves to complete
+	if IS_STUDIO then
+		print("⏳ Waiting 2 seconds for saves to complete...")
+		task.wait(2)
+		print("✅ Save complete, safe to close")
+	else
+		task.wait(5)  -- More time in production
+	end
+end)
+
 -- Handle upgrade requests (defined after all functions are available)
 upgradeEvent.OnServerEvent:Connect(function(player, action, upgradeType)
 	if action == "purchase" then
 		local result = purchaseUpgrade(player, upgradeType)
 		upgradeEvent:FireClient(player, "purchaseResult", result)
+	elseif action == "manualSave" then
+		-- Manual save for testing
+		print("🔧 Manual save requested for", player.Name)
+		savePlayerUpgrades(player)
+		upgradeEvent:FireClient(player, "saveComplete", {success = true})
 	elseif action == "getInfo" then
 		local userId = tostring(player.UserId)
 		local upgrades = playerUpgrades[userId]
@@ -435,6 +600,9 @@ return {
 	getSpeedMultiplier = getSpeedMultiplier,
 	updateBoatUpgrade = updateBoatUpgrade,
 	updateBoatSpeed = updateBoatSpeed,
+	setInitialFuel = setInitialFuel,
+	savePlayerUpgrades = savePlayerUpgrades,
+	updatePlayerFuel = updatePlayerFuel,  -- New: track fuel changes
 	getPlayerUpgrades = function(player) 
 		local userId = tostring(player.UserId)
 		return playerUpgrades[userId]

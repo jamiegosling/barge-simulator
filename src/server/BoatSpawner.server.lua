@@ -35,6 +35,12 @@ Players.PlayerAdded:Connect(function(player)
 	local boat = BoatTemplate:Clone()
 	boat.Name = "Boat_" .. player.Name
 
+	-- Add FuelAmount value for tracking
+	local fuelAmount = Instance.new("NumberValue")
+	fuelAmount.Name = "FuelAmount"
+	fuelAmount.Value = 100  -- Default value, will be updated by UpgradeManager
+	fuelAmount.Parent = boat
+
 	-- Optional: Tag ownership
 	local ownerTag = Instance.new("StringValue")
 	ownerTag.Name = "Owner"
@@ -81,12 +87,44 @@ Players.PlayerAdded:Connect(function(player)
 	applyUpgrades(boat, player, "speed")
 	applyUpgrades(boat, player, "cargo_capacity")
 	applyUpgrades(boat, player, "fuel_capacity")
+	-- Set initial fuel from DataStore
+	UpgradeManager.setInitialFuel(boat, player)
 	print("Applied all upgrades to", player.Name .. "'s boat after data loaded")
+	
+	-- Monitor fuel changes periodically for this boat
+	local fuelAmount = boat:FindFirstChild("FuelAmount")
+	if fuelAmount then
+		-- Track fuel changes every 5 seconds
+		task.spawn(function()
+			local lastFuelValue = fuelAmount.Value
+			while boat.Parent and player.Parent do
+				task.wait(5)
+				if fuelAmount.Value ~= lastFuelValue then
+					-- Fuel changed, update the tracking system
+					UpgradeManager.updatePlayerFuel(player, fuelAmount.Value)
+					lastFuelValue = fuelAmount.Value
+				end
+			end
+		end)
+	end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
 	local playerBoat = BoatFolder:FindFirstChild("Boat_" .. player.Name)
 	if playerBoat then
+		-- Save fuel before destroying boat
+		local fuelAmount = playerBoat:FindFirstChild("FuelAmount")
+		if fuelAmount then
+			print("⛽ BoatSpawner: Saving fuel for", player.Name, "before boat destruction:", fuelAmount.Value)
+			-- Use the new updatePlayerFuel function to track changes
+			UpgradeManager.updatePlayerFuel(player, fuelAmount.Value)
+		else
+			print("⚠️ DEBUG: No FuelAmount found on boat for", player.Name)
+		end
 		playerBoat:Destroy()
+		
+		-- Force save to DataStore after updating fuel
+		UpgradeManager.savePlayerUpgrades(player)
+		print("✅ BoatSpawner: Forced save after fuel update for", player.Name)
 	end
 end)

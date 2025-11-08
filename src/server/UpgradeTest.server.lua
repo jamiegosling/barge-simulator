@@ -55,14 +55,17 @@ local function viewPlayerData(player)
 end
 
 -- Debug function to modify player DataStore data
-local function setPlayerData(player, speedLevel, money)
+local function setPlayerData(player, speedLevel, money, currentFuel, fuelLevel, cargoLevel)
 	local targetPlayer = player
 	local userId = tostring(targetPlayer.UserId)
 	
 	local newData = {
 		speedLevel = speedLevel,
 		moneySpent = 0,
-		money = money
+		money = money,
+		currentFuel = currentFuel,
+		fuelLevel = fuelLevel,
+		cargoLevel = cargoLevel
 	}
 	
 	local success, errorMessage = pcall(function()
@@ -73,6 +76,9 @@ local function setPlayerData(player, speedLevel, money)
 		print("Updated DataStore for " .. targetPlayer.Name .. ":")
 		print("  Speed Level:", speedLevel)
 		print("  Money:", money)
+		if currentFuel ~= nil then print("  Current Fuel:", currentFuel) end
+		if fuelLevel ~= nil then print("  Fuel Level:", fuelLevel) end
+		if cargoLevel ~= nil then print("  Cargo Level:", cargoLevel) end
 		print("Player must rejoin for changes to take effect.")
 	else
 		print("Failed to update DataStore:", errorMessage)
@@ -197,11 +203,20 @@ local function processCommand(player, command)
 		viewPlayerData(player)
 	elseif command:sub(1, 9) == "/setdata " then
 		local params = command:sub(10)
-		local speedLevel, money = params:match("(%d+)%s+(%d+)")
+		-- Accept: /setdata speedLevel money [currentFuel] [fuelLevel] [cargoLevel]
+		local numbers = {}
+		for num in params:gmatch("%d+") do
+			table.insert(numbers, tonumber(num))
+		end
+		local speedLevel = numbers[1]
+		local money = numbers[2]
+		local currentFuel = numbers[3]
+		local fuelLevel = numbers[4]
+		local cargoLevel = numbers[5]
 		if speedLevel and money then
-			setPlayerData(player, tonumber(speedLevel), tonumber(money))
+			setPlayerData(player, speedLevel, money, currentFuel, fuelLevel, cargoLevel)
 		else
-			print("Usage: /setdata [speedLevel] [money]")
+			print("Usage: /setdata [speedLevel] [money] [currentFuel?] [fuelLevel?] [cargoLevel?]")
 		end
 	elseif command == "/cleardata" then
 		clearPlayerData(player)
@@ -216,7 +231,7 @@ local function processCommand(player, command)
 		print("/add [amount] - Add test money")
 		print("/testupgrades - View current upgrade stats")
 		print("/viewdata - View DataStore data")
-		print("/setdata [speedLevel] [money] - Set DataStore values")
+		print("/setdata [speedLevel] [money] [currentFuel?] [fuelLevel?] [cargoLevel?] - Set DataStore values")
 		print("/cleardata - Clear DataStore data")
 		print("/viewkeys - View all DataStore keys")
 		print("/forcesave - Force save current data")
