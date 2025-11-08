@@ -8,7 +8,7 @@ fuelShopEvent.Name = "FuelShopEvent"
 fuelShopEvent.Parent = ReplicatedStorage
 
 -- Fuel shop configuration
-local FUEL_COST_PER_UNIT = 5  -- Cost per unit of fuel
+local FUEL_COST_PER_UNIT = 3  -- Cost per unit of fuel
 
 -- Get the UpgradeManager module
 local upgradeManager = require(script.Parent.UpgradeManager)
