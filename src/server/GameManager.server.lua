@@ -8,40 +8,51 @@ local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
 local ActiveJobs = {} -- player.UserId → {job = job table, loaded = boolean}
 local PlayersInZones = {} -- player.UserId → {zoneName = true, ...}
 
--- Helper function to get player's boat cargo capacity
-local function GetPlayerBoatCargoCapacity(player)
-	-- Find the player's boat in workspace
+local PlayDeliveryEffect
+
+-- Helper function to get player's boat
+local function GetPlayerBoat(player)
 	local playerBoats = workspace:FindFirstChild("PlayerBoats")
-	if not playerBoats then return 0 end
-	
+	if not playerBoats then return nil end
+
 	for _, boat in ipairs(playerBoats:GetChildren()) do
 		local ownerTag = boat:FindFirstChild("Owner")
 		if ownerTag and tostring(ownerTag.Value) == tostring(player.UserId) then
-			-- Found the player's boat, now get cargo capacity
-			local boatScript = boat:FindFirstChild("VehicleSeat") and boat.VehicleSeat:FindFirstChild("BoatScript")
-			if boatScript then
-				local originalCargo = boatScript:FindFirstChild("OriginalCargoCapacity")
-				local cargoMultiplier = boatScript:FindFirstChild("CargoMultiplier")
-				
-				if originalCargo and cargoMultiplier then
-					return originalCargo.Value * cargoMultiplier.Value
-				elseif originalCargo then
-					return originalCargo.Value
-				end
-			end
-			
-			-- Fallback: check boat directly
-			local maxCargo = boat:FindFirstChild("MaxCargo")
-			if maxCargo then
-				return maxCargo.Value
-			end
-			
-			-- Default base cargo capacity
-			return 100
+			return boat
 		end
 	end
-	
-	return 0 -- No boat found
+
+	return nil
+end
+
+-- Helper function to get player's boat cargo capacity
+local function GetPlayerBoatCargoCapacity(player)
+	local boat = GetPlayerBoat(player)
+	if not boat then return 0 end
+
+	-- Found the player's boat, now get cargo capacity
+	local vehicleSeat = boat:FindFirstChildWhichIsA("VehicleSeat")
+	local boatScript = vehicleSeat and (vehicleSeat:FindFirstChild("BoatScript") or vehicleSeat:FindFirstChildWhichIsA("Script"))
+
+	if boatScript then
+		local originalCargo = boatScript:FindFirstChild("OriginalCargoCapacity")
+		local cargoMultiplier = boatScript:FindFirstChild("CargoMultiplier")
+
+		if originalCargo and cargoMultiplier then
+			return originalCargo.Value * cargoMultiplier.Value
+		elseif originalCargo then
+			return originalCargo.Value
+		end
+	end
+
+	-- Fallback: check boat directly
+	local maxCargo = boat:FindFirstChild("MaxCargo")
+	if maxCargo then
+		return maxCargo.Value
+	end
+
+	-- Default base cargo capacity
+	return 100
 end
 
 -- Helper function to check if player is in their boat
@@ -127,6 +138,7 @@ local function CheckJobActionInCurrentZone(player)
 		activeJob.loaded = true
 		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
 		JobStatus:FireClient(player, "loaded", job)
+        PlayDeliveryEffect(player)
 		print(player.Name .. " loaded cargo at " .. job.from .. " for job: " .. job.name)
 		return
 	end
@@ -161,27 +173,25 @@ local function CheckJobActionInCurrentZone(player)
 end
 
 -- Helper function: play particle + sound effects for completed delivery
-local function PlayDeliveryEffect(player, color)
-	print("sparkle function")
-	local character = player.Character
-	if not character then return end
-
-	local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChildWhichIsA("BasePart")
-	print("Effect root:", root)
-	if not root then return end
-
-	-- 🌟 Sparkle particles (bright burst)
-	local sparkles = Instance.new("ParticleEmitter")
-	sparkles.Texture = "rbxassetid://258128463" -- a bright sparkle/glow texture
-	sparkles.Color = ColorSequence.new(color or Color3.fromRGB(255, 255, 150))
-	sparkles.Lifetime = NumberRange.new(1.2, 1.8)
-	sparkles.Rate = 0
-	sparkles.Speed = NumberRange.new(2, 6)
-	sparkles.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 1),
-		NumberSequenceKeypoint.new(0.3, 0.8),
+local function makeSparkleSize(multiplier)
+	multiplier = multiplier or 1
+	return NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1 * multiplier),
+		NumberSequenceKeypoint.new(0.3, 0.8 * multiplier),
 		NumberSequenceKeypoint.new(1, 0)
 	})
+end
+
+local function emitSparkles(target, color, emitCount, speedRange, sizeMultiplier, brightness)
+	if not target then return end
+
+	local sparkles = Instance.new("ParticleEmitter")
+	sparkles.Texture = "rbxassetid://258128463"
+	sparkles.Color = ColorSequence.new(color)
+	sparkles.Lifetime = NumberRange.new(1.2, 1.8)
+	sparkles.Rate = 0
+	sparkles.Speed = speedRange or NumberRange.new(2, 6)
+	sparkles.Size = makeSparkleSize(sizeMultiplier)
 	sparkles.Rotation = NumberRange.new(0, 360)
 	sparkles.RotSpeed = NumberRange.new(-90, 90)
 	sparkles.Transparency = NumberSequence.new({
@@ -192,14 +202,32 @@ local function PlayDeliveryEffect(player, color)
 	sparkles.EmissionDirection = Enum.NormalId.Top
 	sparkles.VelocitySpread = 180
 	sparkles.LightInfluence = 0
-	sparkles.Brightness = 4 -- 🔆 this makes them really pop
-	sparkles.Parent = root
-
-	-- Force visible burst
-	sparkles:Emit(100)
+	sparkles.Brightness = brightness or 4
+	sparkles.Parent = target
+	sparkles:Emit(emitCount or 100)
 
 	game.Debris:AddItem(sparkles, 3)
-	print("end of sparkles function")
+end
+
+PlayDeliveryEffect = function(player, color)
+	local effectColor = color or Color3.fromRGB(255, 255, 150)
+
+	local character = player.Character
+	if character then
+		local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChildWhichIsA("BasePart")
+		emitSparkles(root, effectColor, 100)
+	end
+
+	local boat = GetPlayerBoat(player)
+	if boat then
+		local boatRoot = boat.PrimaryPart or boat:FindFirstChild("Hull") or boat:FindFirstChildWhichIsA("BasePart")
+		if not boatRoot then
+			local boatSeat = boat:FindFirstChildWhichIsA("VehicleSeat")
+			boatRoot = boatSeat or boatRoot
+		end
+
+		emitSparkles(boatRoot, effectColor, 140, NumberRange.new(1, 4), 1.6, 3)
+	end
 
 	-- 🔔 Optional sound
 	-- local sound = Instance.new("Sound")
