@@ -6,6 +6,11 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- Detect if device is touch-enabled and scale text accordingly
+local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local textScale = isTouchDevice and 1.5 or 1.0
+print("Device detection: Touch =", UserInputService.TouchEnabled, "Keyboard =", UserInputService.KeyboardEnabled, "Scale =", textScale)
+
 -- RemoteEvents
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
 local JobStatus = ReplicatedStorage:WaitForChild("JobStatus")
@@ -53,7 +58,7 @@ local function createJobMenuGui()
 	title.BackgroundTransparency = 1
 	title.Text = "📦 Available Jobs 📦"
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.TextSize = 24
+	title.TextSize = math.floor(24 * textScale)
 	title.Font = Enum.Font.GothamBold
 	title.Parent = mainFrame
 	
@@ -66,7 +71,7 @@ local function createJobMenuGui()
 	closeButton.BorderSizePixel = 0
 	closeButton.Text = "X"
 	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	closeButton.TextSize = 14
+	closeButton.TextSize = math.floor(14 * textScale)
 	closeButton.Font = Enum.Font.GothamBold
 	closeButton.Parent = mainFrame
 	
@@ -90,7 +95,7 @@ local function createJobMenuGui()
 	sortLabel.BackgroundTransparency = 1
 	sortLabel.Text = "Sort by:"
 	sortLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	sortLabel.TextSize = 14
+	sortLabel.TextSize = math.floor(14 * textScale)
 	sortLabel.Font = Enum.Font.Gotham
 	sortLabel.TextXAlignment = Enum.TextXAlignment.Left
 	sortLabel.Parent = sortFrame
@@ -104,7 +109,7 @@ local function createJobMenuGui()
 	sortButton.BorderSizePixel = 0
 	sortButton.Text = "Reward (High→Low)"
 	sortButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	sortButton.TextSize = 11
+	sortButton.TextSize = math.floor(11 * textScale)
 	sortButton.Font = Enum.Font.Gotham
 	sortButton.Parent = sortFrame
 	
@@ -120,7 +125,7 @@ local function createJobMenuGui()
 	filterLabel.BackgroundTransparency = 1
 	filterLabel.Text = "Starting From:"
 	filterLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	filterLabel.TextSize = 14
+	filterLabel.TextSize = math.floor(14 * textScale)
 	filterLabel.Font = Enum.Font.Gotham
 	filterLabel.TextXAlignment = Enum.TextXAlignment.Left
 	filterLabel.Parent = sortFrame
@@ -134,7 +139,7 @@ local function createJobMenuGui()
 	filterButton.BorderSizePixel = 0
 	filterButton.Text = "All Locations"
 	filterButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	filterButton.TextSize = 11
+	filterButton.TextSize = math.floor(11 * textScale)
 	filterButton.Font = Enum.Font.Gotham
 	filterButton.Parent = sortFrame
 	
@@ -201,7 +206,7 @@ local function createJobMenuGui()
 		optionButton.BorderSizePixel = 0
 		optionButton.Text = option.text
 		optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-		optionButton.TextSize = 10
+		optionButton.TextSize = math.floor(10 * textScale)
 		optionButton.Font = Enum.Font.Gotham
 		optionButton.ZIndex = 11 -- Ensure buttons appear above dropdown
 		optionButton.Parent = sortDropdown
@@ -223,7 +228,7 @@ local function createJobMenuGui()
 		optionButton.BorderSizePixel = 0
 		optionButton.Text = option.text
 		optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-		optionButton.TextSize = 10
+		optionButton.TextSize = math.floor(10 * textScale)
 		optionButton.Font = Enum.Font.Gotham
 		optionButton.ZIndex = 11
 		optionButton.Parent = filterDropdown
@@ -278,7 +283,7 @@ local function createJobMenuGui()
 	jobTitle.BackgroundTransparency = 1
 	jobTitle.Text = "Job Name"
 	jobTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	jobTitle.TextSize = 16
+	jobTitle.TextSize = math.floor(16 * textScale)
 	jobTitle.Font = Enum.Font.GothamBold
 	jobTitle.TextXAlignment = Enum.TextXAlignment.Left
 	jobTitle.Parent = jobTemplate
@@ -291,7 +296,7 @@ local function createJobMenuGui()
 	jobDetails.BackgroundTransparency = 1
 	jobDetails.Text = "Details"
 	jobDetails.TextColor3 = Color3.fromRGB(200, 200, 200)
-	jobDetails.TextSize = 14
+	jobDetails.TextSize = math.floor(14 * textScale)
 	jobDetails.Font = Enum.Font.Gotham
 	jobDetails.TextXAlignment = Enum.TextXAlignment.Left
 	jobDetails.Parent = jobTemplate
@@ -331,7 +336,7 @@ local function createStatusLabel()
 	statusLabel.BorderSizePixel = 0
 	statusLabel.Text = ""
 	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	statusLabel.TextSize = 16
+	statusLabel.TextSize = math.floor(16 * textScale)
 	statusLabel.Font = Enum.Font.Gotham
 	statusLabel.Visible = false
 	statusLabel.Parent = playerGui

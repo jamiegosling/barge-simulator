@@ -6,6 +6,11 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- Detect if device is touch-enabled and scale text accordingly
+local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local textScale = isTouchDevice and 1.5 or 1.0
+print("Shop Device detection: Touch =", UserInputService.TouchEnabled, "Keyboard =", UserInputService.KeyboardEnabled, "Scale =", textScale)
+
 -- RemoteEvents
 local ShopEvent = ReplicatedStorage:WaitForChild("ShopEvent")
 local UpgradeEvent = ReplicatedStorage:WaitForChild("UpgradeEvent")
@@ -39,7 +44,7 @@ local function createShopGui()
 	title.BackgroundTransparency = 1
 	title.Text = "⚓ Boat Upgrade Shop ⚓"
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.TextSize = 24
+	title.TextSize = math.floor(24 * textScale)
 	title.Font = Enum.Font.GothamBold
 	title.Parent = mainFrame
 	
@@ -59,7 +64,7 @@ local function createShopGui()
 	speedTab.BorderSizePixel = 0
 	speedTab.Text = "🚀 Speed"
 	speedTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedTab.TextSize = 14
+	speedTab.TextSize = math.floor(14 * textScale)
 	speedTab.Font = Enum.Font.GothamBold
 	speedTab.Parent = tabFrame
 	
@@ -71,7 +76,7 @@ local function createShopGui()
 	cargoTab.BorderSizePixel = 0
 	cargoTab.Text = "📦 Cargo"
 	cargoTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-	cargoTab.TextSize = 14
+	cargoTab.TextSize = math.floor(14 * textScale)
 	cargoTab.Font = Enum.Font.GothamBold
 	cargoTab.Parent = tabFrame
 	
@@ -83,7 +88,7 @@ local function createShopGui()
 	fuelTab.BorderSizePixel = 0
 	fuelTab.Text = "⛽ Fuel"
 	fuelTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-	fuelTab.TextSize = 14
+	fuelTab.TextSize = math.floor(14 * textScale)
 	fuelTab.Font = Enum.Font.GothamBold
 	fuelTab.Parent = tabFrame
 	
@@ -118,7 +123,7 @@ local function createShopGui()
 	moneyLabel.BackgroundTransparency = 1
 	moneyLabel.Text = "💰 £0"
 	moneyLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
-	moneyLabel.TextSize = 18
+	moneyLabel.TextSize = math.floor(18 * textScale)
 	moneyLabel.Font = Enum.Font.Gotham
 	moneyLabel.Parent = moneyFrame
 	
@@ -150,7 +155,7 @@ local function createShopGui()
 	speedTitle.BackgroundTransparency = 1
 	speedTitle.Text = "🚀 Boat Speed Upgrade"
 	speedTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedTitle.TextSize = 18
+	speedTitle.TextSize = math.floor(18 * textScale)
 	speedTitle.Font = Enum.Font.GothamBold
 	speedTitle.Parent = speedFrame
 	
@@ -161,7 +166,7 @@ local function createShopGui()
 	speedInfo.BackgroundTransparency = 1
 	speedInfo.Text = "Current Level: 1\nSpeed Multiplier: 1.00x (0% faster)"
 	speedInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
-	speedInfo.TextSize = 14
+	speedInfo.TextSize = math.floor(14 * textScale)
 	speedInfo.Font = Enum.Font.Gotham
 	speedInfo.TextXAlignment = Enum.TextXAlignment.Left
 	speedInfo.Parent = speedFrame
@@ -173,7 +178,7 @@ local function createShopGui()
 	speedCostLabel.BackgroundTransparency = 1
 	speedCostLabel.Text = "Next Upgrade: £100"
 	speedCostLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-	speedCostLabel.TextSize = 16
+	speedCostLabel.TextSize = math.floor(16 * textScale)
 	speedCostLabel.Font = Enum.Font.Gotham
 	speedCostLabel.Parent = speedFrame
 	
@@ -185,7 +190,7 @@ local function createShopGui()
 	speedUpgradeButton.BorderSizePixel = 0
 	speedUpgradeButton.Text = "Upgrade"
 	speedUpgradeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedUpgradeButton.TextSize = 16
+	speedUpgradeButton.TextSize = math.floor(16 * textScale)
 	speedUpgradeButton.Font = Enum.Font.GothamBold
 	speedUpgradeButton.Parent = speedFrame
 	
@@ -209,7 +214,7 @@ local function createShopGui()
 	cargoTitle.BackgroundTransparency = 1
 	cargoTitle.Text = "📦 Cargo Capacity Upgrade"
 	cargoTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	cargoTitle.TextSize = 18
+	cargoTitle.TextSize = math.floor(18 * textScale)
 	cargoTitle.Font = Enum.Font.GothamBold
 	cargoTitle.Parent = cargoFrame
 	
@@ -220,7 +225,7 @@ local function createShopGui()
 	cargoInfo.BackgroundTransparency = 1
 	cargoInfo.Text = "Current Level: 1\nCargo Capacity: 1.00x (0% more capacity)"
 	cargoInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
-	cargoInfo.TextSize = 14
+	cargoInfo.TextSize = math.floor(14 * textScale)
 	cargoInfo.Font = Enum.Font.Gotham
 	cargoInfo.TextXAlignment = Enum.TextXAlignment.Left
 	cargoInfo.Parent = cargoFrame
@@ -232,7 +237,7 @@ local function createShopGui()
 	cargoCostLabel.BackgroundTransparency = 1
 	cargoCostLabel.Text = "Next Upgrade: £100"
 	cargoCostLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-	cargoCostLabel.TextSize = 16
+	cargoCostLabel.TextSize = math.floor(16 * textScale)
 	cargoCostLabel.Font = Enum.Font.Gotham
 	cargoCostLabel.Parent = cargoFrame
 	
@@ -244,7 +249,7 @@ local function createShopGui()
 	cargoUpgradeButton.BorderSizePixel = 0
 	cargoUpgradeButton.Text = "Upgrade"
 	cargoUpgradeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	cargoUpgradeButton.TextSize = 16
+	cargoUpgradeButton.TextSize = math.floor(16 * textScale)
 	cargoUpgradeButton.Font = Enum.Font.GothamBold
 	cargoUpgradeButton.Parent = cargoFrame
 	
@@ -268,7 +273,7 @@ local function createShopGui()
 	fuelTitle.BackgroundTransparency = 1
 	fuelTitle.Text = "⛽ Fuel Capacity Upgrade"
 	fuelTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	fuelTitle.TextSize = 18
+	fuelTitle.TextSize = math.floor(18 * textScale)
 	fuelTitle.Font = Enum.Font.GothamBold
 	fuelTitle.Parent = fuelFrame
 	
@@ -279,7 +284,7 @@ local function createShopGui()
 	fuelInfo.BackgroundTransparency = 1
 	fuelInfo.Text = "Current Level: 1\nFuel Capacity: 1.00x (0% more capacity)"
 	fuelInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
-	fuelInfo.TextSize = 14
+	fuelInfo.TextSize = math.floor(14 * textScale)
 	fuelInfo.Font = Enum.Font.Gotham
 	fuelInfo.TextXAlignment = Enum.TextXAlignment.Left
 	fuelInfo.Parent = fuelFrame
@@ -291,7 +296,7 @@ local function createShopGui()
 	fuelCostLabel.BackgroundTransparency = 1
 	fuelCostLabel.Text = "Next Upgrade: £100"
 	fuelCostLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-	fuelCostLabel.TextSize = 16
+	fuelCostLabel.TextSize = math.floor(16 * textScale)
 	fuelCostLabel.Font = Enum.Font.Gotham
 	fuelCostLabel.Parent = fuelFrame
 	
@@ -303,7 +308,7 @@ local function createShopGui()
 	fuelUpgradeButton.BorderSizePixel = 0
 	fuelUpgradeButton.Text = "Upgrade"
 	fuelUpgradeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	fuelUpgradeButton.TextSize = 16
+	fuelUpgradeButton.TextSize = math.floor(16 * textScale)
 	fuelUpgradeButton.Font = Enum.Font.GothamBold
 	fuelUpgradeButton.Parent = fuelFrame
 	
@@ -320,7 +325,7 @@ local function createShopGui()
 	closeButton.BorderSizePixel = 0
 	closeButton.Text = "X"
 	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	closeButton.TextSize = 14
+	closeButton.TextSize = math.floor(14 * textScale)
 	closeButton.Font = Enum.Font.GothamBold
 	closeButton.Parent = mainFrame
 	
@@ -471,7 +476,7 @@ UpgradeEvent.OnClientEvent:Connect(function(action, data)
 			message.BorderSizePixel = 0
 			message.Text = data.message
 			message.TextColor3 = Color3.fromRGB(255, 255, 255)
-			message.TextSize = 16
+			message.TextSize = math.floor(16 * textScale)
 			message.Font = Enum.Font.GothamBold
 			message.Parent = mainFrame
 			
@@ -497,7 +502,7 @@ UpgradeEvent.OnClientEvent:Connect(function(action, data)
 			message.BorderSizePixel = 0
 			message.Text = data.message
 			message.TextColor3 = Color3.fromRGB(255, 255, 255)
-			message.TextSize = 16
+			message.TextSize = math.floor(16 * textScale)
 			message.Font = Enum.Font.GothamBold
 			message.Parent = mainFrame
 			
