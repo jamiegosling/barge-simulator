@@ -86,7 +86,7 @@ local function createJobMenuGui()
 	local sortLabel = Instance.new("TextLabel")
 	sortLabel.Name = "SortLabel"
 	sortLabel.Size = UDim2.new(0, 60, 1, 0)
-	sortLabel.Position = UDim2.new(0, 0, 0, 0)
+	sortLabel.Position = UDim2.new(0, 40, 0, 0) -- Moved right
 	sortLabel.BackgroundTransparency = 1
 	sortLabel.Text = "Sort by:"
 	sortLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -99,7 +99,7 @@ local function createJobMenuGui()
 	local sortButton = Instance.new("TextButton")
 	sortButton.Name = "SortButton"
 	sortButton.Size = UDim2.new(0, 140, 1, 0) -- Slightly smaller to make room for filter
-	sortButton.Position = UDim2.new(0, 70, 0, 0)
+	sortButton.Position = UDim2.new(0, 110, 0, 0) -- Moved right
 	sortButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 	sortButton.BorderSizePixel = 0
 	sortButton.Text = "Reward (High→Low)"
@@ -116,7 +116,7 @@ local function createJobMenuGui()
 	local filterLabel = Instance.new("TextLabel")
 	filterLabel.Name = "FilterLabel"
 	filterLabel.Size = UDim2.new(0, 85, 1, 0)
-	filterLabel.Position = UDim2.new(0, 220, 0, 0)
+	filterLabel.Position = UDim2.new(0, 270, 0, 0) -- Moved right
 	filterLabel.BackgroundTransparency = 1
 	filterLabel.Text = "Starting From:"
 	filterLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -129,7 +129,7 @@ local function createJobMenuGui()
 	local filterButton = Instance.new("TextButton")
 	filterButton.Name = "FilterButton"
 	filterButton.Size = UDim2.new(0, 120, 1, 0)
-	filterButton.Position = UDim2.new(0, 310, 0, 0) -- Moved right to make room for label
+	filterButton.Position = UDim2.new(0, 360, 0, 0) -- Moved right to make room for label
 	filterButton.BackgroundColor3 = Color3.fromRGB(80, 60, 80) -- Purple-ish color to distinguish from sort
 	filterButton.BorderSizePixel = 0
 	filterButton.Text = "All Locations"
@@ -145,8 +145,8 @@ local function createJobMenuGui()
 	-- Sort dropdown menu (initially hidden)
 	local sortDropdown = Instance.new("Frame")
 	sortDropdown.Name = "SortDropdown"
-	sortDropdown.Size = UDim2.new(0, 140, 0, 120) -- Adjusted width
-	sortDropdown.Position = UDim2.new(0, 80, 0, 95) -- Absolute position relative to main frame
+	sortDropdown.Size = UDim2.new(0, 140, 0, 160) -- Increased height for new option
+	sortDropdown.Position = UDim2.new(0, 100, 0, 95) -- Moved right to align with sort button
 	sortDropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 	sortDropdown.BorderSizePixel = 0
 	sortDropdown.Visible = false
@@ -157,7 +157,7 @@ local function createJobMenuGui()
 	local filterDropdown = Instance.new("Frame")
 	filterDropdown.Name = "FilterDropdown"
 	filterDropdown.Size = UDim2.new(0, 120, 0, 200) -- Taller for more locations
-	filterDropdown.Position = UDim2.new(0, 320, 0, 95) -- Position aligned with filter button
+	filterDropdown.Position = UDim2.new(0, 350, 0, 95) -- Moved right to align with filter button
 	filterDropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 	filterDropdown.BorderSizePixel = 0
 	filterDropdown.Visible = false
@@ -171,6 +171,7 @@ local function createJobMenuGui()
 	-- Sort options
 	local sortOptions = {
 		{text = "Reward (High→Low)", value = "reward"},
+		{text = "Reward (Low→High)", value = "reward_low_high"},
 		{text = "Start Location (A→Z)", value = "start_location"},
 		{text = "Finish Location (A→Z)", value = "finish_location"}
 	}
@@ -366,6 +367,8 @@ end
 local function sortJobs(jobs)
 	if currentSort == "reward" then
 		table.sort(jobs, function(a, b) return a.reward > b.reward end)
+	elseif currentSort == "reward_low_high" then
+		table.sort(jobs, function(a, b) return a.reward < b.reward end)
 	elseif currentSort == "start_location" then
 		table.sort(jobs, function(a, b) return a.from < b.from end)
 	elseif currentSort == "finish_location" then
@@ -503,7 +506,7 @@ for sortValue, optionButton in pairs(sortOptionButtons) do
 		print("DEBUG: Sort option clicked:", sortValue)
 		currentSort = sortValue
 		-- Update button text
-		for _, option in ipairs({{text = "Reward (High→Low)", value = "reward"}, {text = "Start Location (A→Z)", value = "start_location"}, {text = "Finish Location (A→Z)", value = "finish_location"}}) do
+		for _, option in ipairs({{text = "Reward (High→Low)", value = "reward"}, {text = "Reward (Low→High)", value = "reward_low_high"}, {text = "Start Location (A→Z)", value = "start_location"}, {text = "Finish Location (A→Z)", value = "finish_location"}}) do
 			if option.value == sortValue then
 				sortButton.Text = option.text
 				print("DEBUG: Button text updated to:", option.text)

@@ -1,6 +1,7 @@
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local Engine = script.Parent.Parent.BargeEngine.BodyThrust
 local SForce = script.Parent.Parent.BargeSteer.BodyAngularVelocity
@@ -38,6 +39,15 @@ local totalDistanceTraveled = 0
 
 -- Track fuel-empty state to trigger throttle updates without input
 local outOfFuel = (currentFuel <= 0)
+
+-- ==================== TOUCH CONTROL VARIABLES ==================== --
+local isTouchDevice = UserInputService.TouchEnabled
+local smoothedSteerFloat = 0
+local smoothedThrottleFloat = 0
+local steeringSmoothingFactor = isTouchDevice and 0.15 or 1.0  -- More smoothing for touch
+local throttleSmoothingFactor = isTouchDevice and 0.2 or 1.0   -- More smoothing for touch
+local touchSteerDeadZone = isTouchDevice and 0.08 or 0.01     -- Larger dead zone for touch
+local touchThrottleDeadZone = isTouchDevice and 0.05 or 0.01   -- Larger dead zone for touch
 
 -- Prevent UpdateFuel from overriding purchased fuel
 local function isFuelPurchaseInProgress()
@@ -291,18 +301,38 @@ local function updateHUD()
 	end
 end
 
+-- ==================== INPUT SMOOTHING ==================== --
+
+-- Function to smooth input values for better touch control
+local function smoothInput(rawValue, smoothedValue, smoothingFactor)
+	return smoothedValue + (rawValue - smoothedValue) * smoothingFactor
+end
+
+-- Function to apply dead zone to input
+local function applyDeadZone(value, deadZone)
+	if math.abs(value) < deadZone then
+		return 0
+	end
+	return value
+end
+
 -- ==================== STEERING AND THROTTLE ==================== --
 
 -- Function to handle all steering logic
 local function UpdateSteering(speed)
 	local angularVelocity = Vector3.new(0, 0, 0)
 
-	if movementDirection ~= 0 and math.abs(DSeat.SteerFloat) > 0.01 then
+	-- Apply dead zone and smoothing to steering input
+	local rawSteer = DSeat.SteerFloat
+	local deadZoneSteer = applyDeadZone(rawSteer, touchSteerDeadZone)
+	smoothedSteerFloat = smoothInput(deadZoneSteer, smoothedSteerFloat, steeringSmoothingFactor)
+
+	if movementDirection ~= 0 and math.abs(smoothedSteerFloat) > 0.01 then
 		-- Quadratic curve - steering grows faster at higher speeds
 		local speedFactor = math.min((math.abs(speed) / 50) ^ 2, 1)
 		local adjustedSteerSpeed = SteerSpeed * speedFactor
 
-		angularVelocity = Vector3.new(0, -adjustedSteerSpeed * DSeat.SteerFloat * movementDirection, 0)
+		angularVelocity = Vector3.new(0, -adjustedSteerSpeed * smoothedSteerFloat * movementDirection, 0)
 	end
 
 	SForce.AngularVelocity = angularVelocity
@@ -323,7 +353,12 @@ local function UpdateThrottle()
 		effectiveMaxSpeed = baseMaxSpeed * 0.75  -- Half of original speed
 	end
 
-	Engine.Force = Vector3.new(0, 0, effectiveMaxSpeed * DSeat.ThrottleFloat)
+	-- Apply dead zone and smoothing to throttle input
+	local rawThrottle = DSeat.ThrottleFloat
+	local deadZoneThrottle = applyDeadZone(rawThrottle, touchThrottleDeadZone)
+	smoothedThrottleFloat = smoothInput(deadZoneThrottle, smoothedThrottleFloat, throttleSmoothingFactor)
+
+	Engine.Force = Vector3.new(0, 0, effectiveMaxSpeed * smoothedThrottleFloat)
 	UpdateSteering(currentSpeed)
 end
 
