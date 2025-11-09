@@ -145,7 +145,7 @@ local function createFuelShopGui()
 		local button = Instance.new("TextButton")
 		button.Name = "FuelButton" .. i
 		button.Size = UDim2.new(0.48, 0, 0, 45)
-		button.Position = UDim2.new((i-1) * 0.52, 0, 0, 0)
+		button.Position = UDim2.new((i-1) * 0.55, 0, 0, 0)
 		button.BackgroundColor3 = data.color
 		button.BorderSizePixel = 0
 		button.Text = data.text
@@ -158,7 +158,19 @@ local function createFuelShopGui()
 		corner.CornerRadius = UDim.new(0, 5)
 		corner.Parent = button
 		
-		buttons[i] = {button = button, amount = data.amount}
+		-- Add cost label inside button
+		local costLabel = Instance.new("TextLabel")
+		costLabel.Name = "CostLabel"
+		costLabel.Size = UDim2.new(1, 0, 0, 15)
+		costLabel.Position = UDim2.new(0, 0, 1, -15)
+		costLabel.BackgroundTransparency = 1
+		costLabel.Text = "£0"
+		costLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+		costLabel.TextSize = 10
+		costLabel.Font = Enum.Font.GothamBold
+		costLabel.Parent = button
+		
+		buttons[i] = {button = button, amount = data.amount, costLabel = costLabel}
 	end
 	
 	-- Create second row (100 and Fill)
@@ -167,7 +179,7 @@ local function createFuelShopGui()
 		local button = Instance.new("TextButton")
 		button.Name = "FuelButton" .. i
 		button.Size = UDim2.new(0.48, 0, 0, 45)
-		button.Position = UDim2.new((i-3) * 0.52, 0, 0, 50)
+		button.Position = UDim2.new((i-3) * 0.55, 0, 0, 50)
 		button.BackgroundColor3 = data.color
 		button.BorderSizePixel = 0
 		button.Text = data.text
@@ -180,27 +192,22 @@ local function createFuelShopGui()
 		corner.CornerRadius = UDim.new(0, 5)
 		corner.Parent = button
 		
-		buttons[i] = {button = button, amount = data.amount}
+		-- Add cost label inside button
+		local costLabel = Instance.new("TextLabel")
+		costLabel.Name = "CostLabel"
+		costLabel.Size = UDim2.new(1, 0, 0, 15)
+		costLabel.Position = UDim2.new(0, 0, 1, -15)
+		costLabel.BackgroundTransparency = 1
+		costLabel.Text = "£0"
+		costLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+		costLabel.TextSize = 10
+		costLabel.Font = Enum.Font.GothamBold
+		costLabel.Parent = button
+		
+		buttons[i] = {button = button, amount = data.amount, costLabel = costLabel}
 	end
 	
-	-- Add cost labels below each button
-	local costLabels = {}
-	for i = 1, 4 do
-		local label = Instance.new("TextLabel")
-		label.Name = "CostLabel" .. i
-		label.Size = UDim2.new(0.48, 0, 0, 20)
-		local row = math.floor((i-1) / 2)
-		local col = (i-1) % 2
-		label.Position = UDim2.new(col * 0.52, 0, 0, row * 50 + 45)
-		label.BackgroundTransparency = 1
-		label.Text = "£0"
-		label.TextColor3 = Color3.fromRGB(255, 215, 0)
-		label.TextSize = 12
-		label.Font = Enum.Font.Gotham
-		label.Parent = buttonsFrame
-		costLabels[i] = label
-	end
-	
+		
 	-- Close button
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "CloseButton"
@@ -221,11 +228,11 @@ local function createFuelShopGui()
 	-- Initially hide the GUI
 	screenGui.Enabled = false
 	
-	return screenGui, mainFrame, moneyLabel, currentFuelLabel, fuelLevelLabel, costLabel, buttons, costLabels, closeButton
+	return screenGui, mainFrame, moneyLabel, currentFuelLabel, fuelLevelLabel, costLabel, buttons, closeButton
 end
 
 -- Create the GUI
-local fuelShopGui, mainFrame, moneyLabel, currentFuelLabel, fuelLevelLabel, costLabel, fuelButtons, costLabels, closeButton = createFuelShopGui()
+local fuelShopGui, mainFrame, moneyLabel, currentFuelLabel, fuelLevelLabel, costLabel, fuelButtons, closeButton = createFuelShopGui()
 
 -- Get player's current fuel information
 local function getPlayerFuelInfo()
@@ -267,7 +274,7 @@ local function updateFuelShopDisplay()
 		costLabel.Text = "Refill Cost: N/A"
 		for i = 1, 4 do
 			fuelButtons[i].button.Visible = false
-			costLabels[i].Visible = false
+			fuelButtons[i].costLabel.Visible = false
 		end
 		return
 	end
@@ -296,18 +303,18 @@ local function updateFuelShopDisplay()
 			-- Show/hide button based on if we can add that much fuel
 			if actualAmount <= fuelNeeded then
 				fuelButtons[i].button.Visible = true
-				costLabels[i].Visible = true
-				costLabels[i].Text = string.format("£%d", cost)
+				fuelButtons[i].costLabel.Visible = true
+				fuelButtons[i].costLabel.Text = string.format("£%d", cost)
 			else
 				fuelButtons[i].button.Visible = false
-				costLabels[i].Visible = false
+				fuelButtons[i].costLabel.Visible = false
 			end
 		end
 	else
 		costLabel.Text = "Tank is already full!"
 		for i = 1, 4 do
 			fuelButtons[i].button.Visible = false
-			costLabels[i].Visible = false
+			fuelButtons[i].costLabel.Visible = false
 		end
 	end
 end

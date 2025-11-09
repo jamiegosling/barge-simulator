@@ -12,14 +12,14 @@ ResourceManager.DISTANCE_MATRIX = {
 		Bristol = 350,  -- ~120 miles in game units
 		Boatyard = 300,
 		Newcastle = 350,
-		Exeter = 300
+		Exeter = 200
 	},
 	Leeds = {
 		London = 220,
 		Bristol = 280,  -- ~170 miles in game units
 		Boatyard = 280,
 		Newcastle = 200,
-		Exeter = 400
+		Exeter = 300
 	},
 	Bristol = {
 		London = 350,
@@ -33,7 +33,7 @@ ResourceManager.DISTANCE_MATRIX = {
 		Leeds = 280,
 		Bristol = 280,
 		Newcastle = 280,
-		Exeter = 150
+		Exeter = 500
 	},
 	Newcastle = {
 		London = 350,
@@ -43,10 +43,10 @@ ResourceManager.DISTANCE_MATRIX = {
 		Exeter = 200
 	},
 	Exeter = {
-		Leeds = 400,
-		London = 300,
+		Leeds = 300,
+		London = 200,
 		Bristol = 200,
-		Boatyard = 150,
+		Boatyard = 500,
 		Newcastle = 200
 	}
 }
