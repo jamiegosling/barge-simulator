@@ -367,7 +367,7 @@ local function createCancelJobButton()
 	local cancelButton = Instance.new("TextButton")
 	cancelButton.Name = "CancelJobButton"
 	cancelButton.Size = UDim2.new(0, 150, 0, 50)
-	cancelButton.Position = UDim2.new(1, -170, 1, -70)
+	cancelButton.Position = UDim2.new(0.737, 0, 0.15, 0)
 	cancelButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 	cancelButton.BorderSizePixel = 0
 	cancelButton.Text = "Cancel Job"
