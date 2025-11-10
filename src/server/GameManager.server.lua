@@ -3,12 +3,25 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local JobsManager = require(ReplicatedStorage.Shared.Modules.JobsManager)
 local JobMessage = ReplicatedStorage:WaitForChild("JobMessage")
 local JobStatus = ReplicatedStorage:WaitForChild("JobStatus")
+local UpdateJobDestination = ReplicatedStorage:WaitForChild("UpdateJobDestination")
 
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
+local CancelJob = ReplicatedStorage:WaitForChild("CancelJob")
 local ActiveJobs = {} -- player.UserId → {job = job table, loaded = boolean}
 local PlayersInZones = {} -- player.UserId → {zoneName = true, ...}
 
 local PlayDeliveryEffect
+
+-- Helper function to get delivery zone position
+local function GetDeliveryZonePosition(zoneName)
+	local zonePart = workspace:FindFirstChild(zoneName .. "DeliveryZone")
+	if zonePart then
+		return zonePart.Position
+	end
+	-- Fallback: return a default position if zone not found
+	warn("Could not find delivery zone:", zoneName .. "DeliveryZone")
+	return Vector3.new(0, 10, 0)
+end
 
 -- Helper function to get player's boat
 local function GetPlayerBoat(player)
@@ -138,6 +151,11 @@ local function CheckJobActionInCurrentZone(player)
 		activeJob.loaded = true
 		JobMessage:FireClient(player, "Boat loaded! Now deliver to " .. job.to)
 		JobStatus:FireClient(player, "loaded", job)
+		
+		-- Send guideline to delivery location
+		local deliveryPosition = GetDeliveryZonePosition(job.to)
+		UpdateJobDestination:FireClient(player, deliveryPosition, false) -- false = delivery location
+		
         PlayDeliveryEffect(player)
 		print(player.Name .. " loaded cargo at " .. job.from .. " for job: " .. job.name)
 		return
@@ -157,6 +175,10 @@ local function CheckJobActionInCurrentZone(player)
 		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
 		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
 		JobStatus:FireClient(player, "completed", job)
+		
+		-- Remove guideline
+		UpdateJobDestination:FireClient(player, nil, false)
+		
 		ActiveJobs[player.UserId] = nil
 		
 		-- Play visual effect based on zone
@@ -253,6 +275,9 @@ end)
 
 -- Clean up when players leave
 Players.PlayerRemoving:Connect(function(player)
+	-- Remove guideline
+	UpdateJobDestination:FireClient(player, nil, false)
+	
 	ActiveJobs[player.UserId] = nil
 	PlayersInZones[player.UserId] = nil
 end)
@@ -277,9 +302,47 @@ JobPicked.OnServerEvent:Connect(function(player, jobId)
 		JobMessage:FireClient(player, "Accepted job: " .. job.name .. ". Go to " .. job.from .. " to load your boat.")
 		JobStatus:FireClient(player, "accepted", job)
 		
+		-- Send guideline to pickup location
+		local pickupPosition = GetDeliveryZonePosition(job.from)
+		UpdateJobDestination:FireClient(player, pickupPosition, true) -- true = pickup location
+		
 		-- Check if player is already in the correct zone for immediate action
 		CheckJobActionInCurrentZone(player)
 	end
+end)
+
+-- Handle job cancellation
+CancelJob.OnServerEvent:Connect(function(player)
+	local activeJob = ActiveJobs[player.UserId]
+	if not activeJob then
+		JobMessage:FireClient(player, "You don't have an active job to cancel.")
+		return
+	end
+	
+	local job = activeJob.job
+	local cancellationFee = math.floor(job.reward * 0.1)
+	
+	-- Check if player has enough money to pay the cancellation fee
+	local playerMoney = player.leaderstats.Money.Value
+	if playerMoney < cancellationFee then
+		JobMessage:FireClient(player, "You don't have enough money to cancel this job (Fee: £" .. cancellationFee .. ")")
+		return
+	end
+	
+	-- Charge the cancellation fee
+	player.leaderstats.Money.Value = player.leaderstats.Money.Value - cancellationFee
+	
+	-- Clear the active job
+	ActiveJobs[player.UserId] = nil
+	
+	-- Remove guideline
+	UpdateJobDestination:FireClient(player, nil, false)
+	
+	-- Notify player
+	JobMessage:FireClient(player, "Job cancelled. You were charged £" .. cancellationFee .. " cancellation fee.")
+	JobStatus:FireClient(player, "cancelled", job)
+	
+	print(player.Name .. " cancelled job: " .. job.name .. " and paid £" .. cancellationFee .. " fee")
 end)
 
 -- Handle delivery zone triggers with zone tracking

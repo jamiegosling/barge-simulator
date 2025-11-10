@@ -14,6 +14,7 @@ print("Device detection: Touch =", UserInputService.TouchEnabled, "Keyboard =", 
 -- RemoteEvents
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
 local JobStatus = ReplicatedStorage:WaitForChild("JobStatus")
+local CancelJob = ReplicatedStorage:WaitForChild("CancelJob")
 local JobsManager = require(ReplicatedStorage.Shared.Modules.JobsManager)
 
 -- Cargo type colors
@@ -24,7 +25,7 @@ local CARGO_COLORS = {
 }
 
 -- Current sort option
-local currentSort = "reward" -- default sort by reward
+local currentSort = "reward_low_high" -- default sort by reward
 
 -- Current filter option
 local currentFilter = "all" -- default show all locations
@@ -175,8 +176,8 @@ local function createJobMenuGui()
 	
 	-- Sort options
 	local sortOptions = {
-		{text = "Reward (High→Low)", value = "reward"},
 		{text = "Reward (Low→High)", value = "reward_low_high"},
+		{text = "Reward (High→Low)", value = "reward"},
 		{text = "Start Location (A→Z)", value = "start_location"},
 		{text = "Finish Location (A→Z)", value = "finish_location"}
 	}
@@ -315,6 +316,7 @@ local currentStatusLabel = nil
 
 -- Current job state
 local isOnJob = false
+local currentJob = nil
 
 -- Update pick button visibility based on job state
 local function updatePickButtonVisibility()
@@ -346,6 +348,174 @@ local function createStatusLabel()
 	statusCorner.Parent = statusLabel
 	
 	currentStatusLabel = statusLabel
+end
+
+-- Cancel Job Button
+local cancelJobButton = nil
+local confirmationPrompt = nil
+
+-- Create Cancel Job button
+local function createCancelJobButton()
+	if cancelJobButton then return end
+	
+	-- Create ScreenGui for the button
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "CancelJobGui"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent = playerGui
+	
+	local cancelButton = Instance.new("TextButton")
+	cancelButton.Name = "CancelJobButton"
+	cancelButton.Size = UDim2.new(0, 150, 0, 50)
+	cancelButton.Position = UDim2.new(1, -170, 1, -70)
+	cancelButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	cancelButton.BorderSizePixel = 0
+	cancelButton.Text = "Cancel Job"
+	cancelButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	cancelButton.TextSize = math.floor(18 * textScale)
+	cancelButton.Font = Enum.Font.GothamBold
+	cancelButton.Visible = false
+	cancelButton.Parent = screenGui
+	
+	local cancelCorner = Instance.new("UICorner")
+	cancelCorner.CornerRadius = UDim.new(0, 8)
+	cancelCorner.Parent = cancelButton
+	
+	cancelJobButton = cancelButton
+end
+
+-- Create confirmation prompt
+local function createConfirmationPrompt()
+	if confirmationPrompt then return end
+	
+	-- Create ScreenGui for the prompt
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "CancelJobPromptGui"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent = playerGui
+	
+	local promptFrame = Instance.new("Frame")
+	promptFrame.Name = "CancelJobPrompt"
+	promptFrame.Size = UDim2.new(0, 400, 0, 200)
+	promptFrame.Position = UDim2.new(0.5, -200, 0.5, -100)
+	promptFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	promptFrame.BorderSizePixel = 0
+	promptFrame.Visible = false
+	promptFrame.ZIndex = 100
+	promptFrame.Parent = screenGui
+	
+	local promptCorner = Instance.new("UICorner")
+	promptCorner.CornerRadius = UDim.new(0, 10)
+	promptCorner.Parent = promptFrame
+	
+	-- Title
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Size = UDim2.new(1, 0, 0, 50)
+	title.Position = UDim2.new(0, 0, 0, 0)
+	title.BackgroundTransparency = 1
+	title.Text = "⚠️ Cancel Job?"
+	title.TextColor3 = Color3.fromRGB(255, 200, 50)
+	title.TextSize = math.floor(22 * textScale)
+	title.Font = Enum.Font.GothamBold
+	title.ZIndex = 101
+	title.Parent = promptFrame
+	
+	-- Message
+	local message = Instance.new("TextLabel")
+	message.Name = "Message"
+	message.Size = UDim2.new(1, -40, 0, 60)
+	message.Position = UDim2.new(0, 20, 0, 50)
+	message.BackgroundTransparency = 1
+	message.Text = "You will be charged 10% of the job value for canceling."
+	message.TextColor3 = Color3.fromRGB(255, 255, 255)
+	message.TextSize = math.floor(16 * textScale)
+	message.Font = Enum.Font.Gotham
+	message.TextWrapped = true
+	message.ZIndex = 101
+	message.Parent = promptFrame
+	
+	-- Fee label
+	local feeLabel = Instance.new("TextLabel")
+	feeLabel.Name = "FeeLabel"
+	feeLabel.Size = UDim2.new(1, -40, 0, 30)
+	feeLabel.Position = UDim2.new(0, 20, 0, 110)
+	feeLabel.BackgroundTransparency = 1
+	feeLabel.Text = "Cancellation Fee: £0"
+	feeLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+	feeLabel.TextSize = math.floor(14 * textScale)
+	feeLabel.Font = Enum.Font.GothamBold
+	feeLabel.ZIndex = 101
+	feeLabel.Parent = promptFrame
+	
+	-- Confirm button
+	local confirmButton = Instance.new("TextButton")
+	confirmButton.Name = "ConfirmButton"
+	confirmButton.Size = UDim2.new(0, 150, 0, 40)
+	confirmButton.Position = UDim2.new(0, 20, 1, -50)
+	confirmButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	confirmButton.BorderSizePixel = 0
+	confirmButton.Text = "Yes, Cancel"
+	confirmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	confirmButton.TextSize = math.floor(16 * textScale)
+	confirmButton.Font = Enum.Font.GothamBold
+	confirmButton.ZIndex = 101
+	confirmButton.Parent = promptFrame
+	
+	local confirmCorner = Instance.new("UICorner")
+	confirmCorner.CornerRadius = UDim.new(0, 5)
+	confirmCorner.Parent = confirmButton
+	
+	-- Cancel button (keep job)
+	local keepButton = Instance.new("TextButton")
+	keepButton.Name = "KeepButton"
+	keepButton.Size = UDim2.new(0, 150, 0, 40)
+	keepButton.Position = UDim2.new(1, -170, 1, -50)
+	keepButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	keepButton.BorderSizePixel = 0
+	keepButton.Text = "Keep Job"
+	keepButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	keepButton.TextSize = math.floor(16 * textScale)
+	keepButton.Font = Enum.Font.GothamBold
+	keepButton.ZIndex = 101
+	keepButton.Parent = promptFrame
+	
+	local keepCorner = Instance.new("UICorner")
+	keepCorner.CornerRadius = UDim.new(0, 5)
+	keepCorner.Parent = keepButton
+	
+	confirmationPrompt = {
+		frame = promptFrame,
+		feeLabel = feeLabel,
+		confirmButton = confirmButton,
+		keepButton = keepButton
+	}
+end
+
+-- Show confirmation prompt
+local function showCancelConfirmation()
+	if not currentJob then return end
+	
+	createConfirmationPrompt()
+	
+	local cancellationFee = math.floor(currentJob.reward * 0.1)
+	confirmationPrompt.feeLabel.Text = "Cancellation Fee: £" .. cancellationFee
+	confirmationPrompt.frame.Visible = true
+end
+
+-- Hide confirmation prompt
+local function hideConfirmation()
+	if confirmationPrompt then
+		confirmationPrompt.frame.Visible = false
+	end
+end
+
+-- Update cancel button visibility
+local function updateCancelButtonVisibility()
+	createCancelJobButton()
+	if cancelJobButton then
+		cancelJobButton.Visible = isOnJob
+	end
 end
 
 -- Get cargo color based on cargo type
@@ -463,7 +633,9 @@ JobStatus.OnClientEvent:Connect(function(state, job)
 	createStatusLabel()
 	
 	isOnJob = (state == "accepted" or state == "loaded")
+	currentJob = isOnJob and job or nil
 	updatePickButtonVisibility()
+	updateCancelButtonVisibility()
 	
 	if currentStatusLabel then
 		if state == "accepted" then
@@ -478,7 +650,18 @@ JobStatus.OnClientEvent:Connect(function(state, job)
 			task.wait(3)
 			currentStatusLabel.Visible = false
 			isOnJob = false
+			currentJob = nil
 			updatePickButtonVisibility()
+			updateCancelButtonVisibility()
+		elseif state == "cancelled" then
+			currentStatusLabel.Visible = true
+			currentStatusLabel.Text = "❌ Job Cancelled: " .. job.name
+			task.wait(3)
+			currentStatusLabel.Visible = false
+			isOnJob = false
+			currentJob = nil
+			updatePickButtonVisibility()
+			updateCancelButtonVisibility()
 		end
 	end
 end)
@@ -562,6 +745,29 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		closeJobMenu()
 	end
 end)
+
+-- Handle cancel job button click
+createCancelJobButton()
+if cancelJobButton then
+	cancelJobButton.MouseButton1Click:Connect(function()
+		showCancelConfirmation()
+	end)
+end
+
+-- Handle confirmation prompt buttons
+createConfirmationPrompt()
+if confirmationPrompt then
+	confirmationPrompt.confirmButton.MouseButton1Click:Connect(function()
+		if currentJob then
+			CancelJob:FireServer()
+			hideConfirmation()
+		end
+	end)
+	
+	confirmationPrompt.keepButton.MouseButton1Click:Connect(function()
+		hideConfirmation()
+	end)
+end
 
 -- Export functions for other scripts
 return {

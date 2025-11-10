@@ -44,10 +44,21 @@ local outOfFuel = (currentFuel <= 0)
 local isTouchDevice = UserInputService.TouchEnabled
 local smoothedSteerFloat = 0
 local smoothedThrottleFloat = 0
-local steeringSmoothingFactor = isTouchDevice and 0.15 or 1.0  -- More smoothing for touch
+local steeringSmoothingFactor = isTouchDevice and 0.1 or 1.0  -- More smoothing for touch
 local throttleSmoothingFactor = isTouchDevice and 0.2 or 1.0   -- More smoothing for touch
-local touchSteerDeadZone = isTouchDevice and 0.08 or 0.01     -- Larger dead zone for touch
-local touchThrottleDeadZone = isTouchDevice and 0.05 or 0.01   -- Larger dead zone for touch
+local touchSteerDeadZone = isTouchDevice and 0.1 or 0.01     -- Larger dead zone for touch
+local touchThrottleDeadZone = isTouchDevice and 0.08 or 0.01   -- Larger dead zone for touch
+
+-- -- Runtime steering adjustment (for testing)
+-- UserInputService.InputBegan:Connect(function(input)
+-- 	if input.KeyCode == Enum.KeyCode.KeypadOne then
+-- 		steeringSmoothingFactor = math.max(0.05, steeringSmoothingFactor - 0.05)
+-- 		print("Steering smoothing decreased to:", steeringSmoothingFactor)
+-- 	elseif input.KeyCode == Enum.KeyCode.KeypadTwo then
+-- 		steeringSmoothingFactor = math.min(1.0, steeringSmoothingFactor + 0.05)
+-- 		print("Steering smoothing increased to:", steeringSmoothingFactor)
+-- 	end
+-- end)
 
 -- Prevent UpdateFuel from overriding purchased fuel
 local function isFuelPurchaseInProgress()
