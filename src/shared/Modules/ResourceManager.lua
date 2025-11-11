@@ -17,7 +17,7 @@ ResourceManager.DISTANCE_MATRIX = {
 	Leeds = {
 		London = 220,
 		Bristol = 280,  -- ~170 miles in game units
-		Boatyard = 280,
+		Boatyard = 200,
 		Newcastle = 300,
 		Exeter = 300
 	},
@@ -30,7 +30,7 @@ ResourceManager.DISTANCE_MATRIX = {
 	},
 	Boatyard = {
 		London = 300,
-		Leeds = 280,
+		Leeds = 200,
 		Bristol = 280,
 		Newcastle = 280,
 		Exeter = 500
@@ -160,12 +160,49 @@ function ResourceManager:GetDistance(from, to)
 	return self.DISTANCE_MATRIX[from] and self.DISTANCE_MATRIX[from][to] or 100
 end
 
--- Get distance multiplier for pricing
+-- Get distance multiplier for pricing (redistributive system)
 function ResourceManager:GetDistanceMultiplier(distance)
-	-- Base multiplier of 1.0, increases with distance
-	-- Formula: 1 + (distance / 1000) * 0.5
-	-- This means 1000 distance = 1.5x multiplier
-	return 1 + (distance / 1000) * 0.5
+	-- This system redistributes rewards rather than increasing total payout
+	-- Longer routes get higher multiplier, shorter routes get lower multiplier
+	-- Average distance jobs get around 1.0x multiplier
+	
+	-- Calculate average distance from all possible routes
+	local totalDistance = 0
+	local routeCount = 0
+	for from, destinations in pairs(self.DISTANCE_MATRIX) do
+		for to, dist in pairs(destinations) do
+			if from ~= to then
+				totalDistance = totalDistance + dist
+				routeCount = routeCount + 1
+			end
+		end
+	end
+	
+	local averageDistance = totalDistance / routeCount
+	
+	-- Redistributive multiplier: 
+	-- - Average distance routes get 1.0x
+	-- - Longer routes get >1.0x (up to ~1.5x for longest routes)
+	-- - Shorter routes get <1.0x (down to ~0.7x for shortest routes)
+	
+	local distanceRatio = distance / averageDistance
+	local multiplier
+	
+	if distanceRatio >= 1.5 then
+		-- Very long routes: up to 1.5x multiplier
+		multiplier = 0.3 + (distanceRatio - 0.5) * 1.5
+	elseif distanceRatio >= 1.0 then
+		-- Long to average routes: 0.9x to 1.0x multiplier
+		multiplier = 0.5 + (distanceRatio - 1.0) * 1.2
+	elseif distanceRatio >= 0.7 then
+		-- Average to short routes: 0.8x to 0.9x multiplier
+		multiplier = 1.1 + (distanceRatio - 0.7) * 1.0
+	else
+		-- Very short routes: down to 0.7x multiplier
+		multiplier = 0.9 + distanceRatio * 0.3
+	end
+	
+	return math.max(0.25, math.min(5.0, multiplier))
 end
 
 -- Get current stock of a resource at a destination
@@ -246,10 +283,23 @@ ResourceManager.CARGO_SIZES = {
 	{size = 130, multiplier = 3.2, label = "Extra Large"}
 }
 
--- Get all available jobs with dynamic pricing and distance bonuses
+-- Get all available jobs with dynamic pricing and distance-based reward redistribution
 function ResourceManager:GetAvailableJobs()
 	local jobs = {}
 	local jobId = 1
+	
+	-- Calculate average distance for reward normalization
+	local totalDistance = 0
+	local routeCount = 0
+	for from, destinations in pairs(self.DISTANCE_MATRIX) do
+		for to, dist in pairs(destinations) do
+			if from ~= to then
+				totalDistance = totalDistance + dist
+				routeCount = routeCount + 1
+			end
+		end
+	end
+	local averageDistance = totalDistance / routeCount
 	
 	-- Generate jobs from each destination that produces resources
 	for fromDestination, fromData in pairs(self.DESTINATIONS) do
@@ -275,8 +325,15 @@ function ResourceManager:GetAvailableJobs()
 								local loadSize = cargoConfig.size
 								local cargoMultiplier = cargoConfig.multiplier
 								
-								-- Calculate final reward: base price * distance * cargo size multiplier
-								local finalReward = math.floor(basePrice * distanceMultiplier * cargoMultiplier)
+								-- Calculate normalized base reward (what an average distance job would pay)
+								local normalizedBaseReward = basePrice * cargoMultiplier
+								
+								-- Apply distance-based redistribution
+								-- This keeps overall rewards similar while favoring longer routes
+								local finalReward = math.floor(normalizedBaseReward * distanceMultiplier)
+								
+								-- Ensure minimum reward to prevent extremely low payouts
+								finalReward = math.max(finalReward, math.floor(basePrice * cargoMultiplier * 0.5))
 								
 								table.insert(jobs, {
 									id = jobId,
@@ -290,7 +347,8 @@ function ResourceManager:GetAvailableJobs()
 									reward = finalReward,
 									distance = distance,
 									baseReward = basePrice,
-									distanceBonus = finalReward - basePrice,
+									distanceBonus = finalReward - (basePrice * cargoMultiplier),
+									distanceMultiplier = distanceMultiplier,
 									availableStock = availableStock
 								})
 								jobId = jobId + 1
