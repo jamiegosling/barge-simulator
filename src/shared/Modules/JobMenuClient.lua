@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -10,6 +11,46 @@ local playerGui = player:WaitForChild("PlayerGui")
 local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local textScale = isTouchDevice and 1.5 or 1.0
 print("Device detection: Touch =", UserInputService.TouchEnabled, "Keyboard =", UserInputService.KeyboardEnabled, "Scale =", textScale)
+
+-- Get viewport size for responsive design
+local camera = workspace.CurrentCamera
+local viewportSize = camera.ViewportSize
+local screenWidth = viewportSize.X
+local screenHeight = viewportSize.Y
+
+-- Responsive sizing calculations
+local function getResponsiveDimensions()
+	local viewportSize = camera.ViewportSize
+	local screenWidth = viewportSize.X
+	local screenHeight = viewportSize.Y
+	
+	-- Define breakpoints
+	local isSmallScreen = screenWidth < 800
+	local isVerySmallScreen = screenWidth < 600
+	
+	-- Calculate responsive dimensions
+	local frameWidth, frameHeight
+	local maxVisibleJobs
+	
+	if isVerySmallScreen then
+		frameWidth = math.min(screenWidth * 0.9, 400)
+		frameHeight = math.min(screenHeight * 0.8, 450)
+		maxVisibleJobs = 4
+	elseif isSmallScreen then
+		frameWidth = math.min(screenWidth * 0.85, 500)
+		frameHeight = math.min(screenHeight * 0.85, 500)
+		maxVisibleJobs = 6
+	else
+		frameWidth = math.min(screenWidth * 0.7, 600)
+		frameHeight = math.min(screenHeight * 0.8, 550)
+		maxVisibleJobs = 8
+	end
+	
+	return frameWidth, frameHeight, maxVisibleJobs, isSmallScreen, isVerySmallScreen
+end
+
+local responsiveWidth, responsiveHeight, maxJobsVisible, isSmallScreen, isVerySmallScreen = getResponsiveDimensions()
+print("Responsive sizing: Width =", responsiveWidth, "Height =", responsiveHeight, "Max Jobs =", maxJobsVisible)
 
 -- RemoteEvents
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
@@ -25,7 +66,7 @@ local CARGO_COLORS = {
 }
 
 -- Current sort option
-local currentSort = "reward_low_high" -- default sort by reward
+local currentSort = "reward_low_high" -- default sort by reward low to high
 
 -- Current filter option
 local currentFilter = "all" -- default show all locations
@@ -37,11 +78,11 @@ local function createJobMenuGui()
 	screenGui.ResetOnSpawn = false
 	screenGui.Parent = playerGui
 	
-	-- Main frame
+	-- Main frame with responsive sizing
 	local mainFrame = Instance.new("Frame")
 	mainFrame.Name = "MainFrame"
-	mainFrame.Size = UDim2.new(0, 600, 0, 550) -- Increased height for sort dropdown
-	mainFrame.Position = UDim2.new(0.5, -300, 0.5, -275)
+	mainFrame.Size = UDim2.new(0, responsiveWidth, 0, responsiveHeight)
+	mainFrame.Position = UDim2.new(0.5, -responsiveWidth/2, 0.5, -responsiveHeight/2)
 	mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 	mainFrame.BorderSizePixel = 0
 	mainFrame.Parent = screenGui
@@ -63,16 +104,16 @@ local function createJobMenuGui()
 	title.Font = Enum.Font.GothamBold
 	title.Parent = mainFrame
 	
-	-- Close button
+	-- Close button with responsive positioning
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "CloseButton"
-	closeButton.Size = UDim2.new(0, 30, 0, 30)
-	closeButton.Position = UDim2.new(1, -35, 0, 10)
+	closeButton.Size = UDim2.new(0, math.max(25, responsiveWidth * 0.05), 0, math.max(25, responsiveHeight * 0.05))
+	closeButton.Position = UDim2.new(1, -closeButton.Size.X.Offset - 5, 0, 5)
 	closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 	closeButton.BorderSizePixel = 0
 	closeButton.Text = "X"
 	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	closeButton.TextSize = math.floor(14 * textScale)
+	closeButton.TextSize = math.floor(math.max(12, responsiveWidth * 0.025) * textScale)
 	closeButton.Font = Enum.Font.GothamBold
 	closeButton.Parent = mainFrame
 	
@@ -80,10 +121,10 @@ local function createJobMenuGui()
 	closeCorner.CornerRadius = UDim.new(0, 5)
 	closeCorner.Parent = closeButton
 	
-	-- Sort dropdown frame
+	-- Sort dropdown frame with responsive sizing
 	local sortFrame = Instance.new("Frame")
 	sortFrame.Name = "SortFrame"
-	sortFrame.Size = UDim2.new(1, -20, 0, 35)
+	sortFrame.Size = UDim2.new(1, -20, 0, isVerySmallScreen and 30 or 35)
 	sortFrame.Position = UDim2.new(0, 10, 0, 55)
 	sortFrame.BackgroundTransparency = 1
 	sortFrame.Parent = mainFrame
@@ -91,12 +132,12 @@ local function createJobMenuGui()
 	-- Sort label
 	local sortLabel = Instance.new("TextLabel")
 	sortLabel.Name = "SortLabel"
-	sortLabel.Size = UDim2.new(0, 60, 1, 0)
-	sortLabel.Position = UDim2.new(0, 40, 0, 0) -- Moved right
+	sortLabel.Size = UDim2.new(0, isVerySmallScreen and 50 or 60, 1, 0)
+	sortLabel.Position = UDim2.new(0, isVerySmallScreen and 20 or 40, 0, 0)
 	sortLabel.BackgroundTransparency = 1
-	sortLabel.Text = "Sort by:"
+	sortLabel.Text = "Sort:"
 	sortLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	sortLabel.TextSize = math.floor(14 * textScale)
+	sortLabel.TextSize = math.floor((isVerySmallScreen and 12 or 14) * textScale)
 	sortLabel.Font = Enum.Font.Gotham
 	sortLabel.TextXAlignment = Enum.TextXAlignment.Left
 	sortLabel.Parent = sortFrame
@@ -104,13 +145,13 @@ local function createJobMenuGui()
 	-- Sort dropdown button
 	local sortButton = Instance.new("TextButton")
 	sortButton.Name = "SortButton"
-	sortButton.Size = UDim2.new(0, 140, 1, 0) -- Slightly smaller to make room for filter
-	sortButton.Position = UDim2.new(0, 110, 0, 0) -- Moved right
+	sortButton.Size = UDim2.new(0, isVerySmallScreen and 100 or 140, 1, 0)
+	sortButton.Position = UDim2.new(0, isVerySmallScreen and 80 or 110, 0, 0)
 	sortButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 	sortButton.BorderSizePixel = 0
-	sortButton.Text = "Reward (High→Low)"
+	sortButton.Text = "Reward (Low→High)"
 	sortButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	sortButton.TextSize = math.floor(11 * textScale)
+	sortButton.TextSize = math.floor((isVerySmallScreen and 9 or 11) * textScale)
 	sortButton.Font = Enum.Font.Gotham
 	sortButton.Parent = sortFrame
 	
@@ -121,12 +162,12 @@ local function createJobMenuGui()
 	-- Filter label
 	local filterLabel = Instance.new("TextLabel")
 	filterLabel.Name = "FilterLabel"
-	filterLabel.Size = UDim2.new(0, 85, 1, 0)
-	filterLabel.Position = UDim2.new(0, 270, 0, 0) -- Moved right
+	filterLabel.Size = UDim2.new(0, isVerySmallScreen and 60 or 85, 1, 0)
+	filterLabel.Position = UDim2.new(0, isVerySmallScreen and 190 or 270, 0, 0)
 	filterLabel.BackgroundTransparency = 1
-	filterLabel.Text = "Starting From:"
+	filterLabel.Text = "From:"
 	filterLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	filterLabel.TextSize = math.floor(14 * textScale)
+	filterLabel.TextSize = math.floor((isVerySmallScreen and 12 or 14) * textScale)
 	filterLabel.Font = Enum.Font.Gotham
 	filterLabel.TextXAlignment = Enum.TextXAlignment.Left
 	filterLabel.Parent = sortFrame
@@ -134,13 +175,13 @@ local function createJobMenuGui()
 	-- Filter dropdown button
 	local filterButton = Instance.new("TextButton")
 	filterButton.Name = "FilterButton"
-	filterButton.Size = UDim2.new(0, 120, 1, 0)
-	filterButton.Position = UDim2.new(0, 360, 0, 0) -- Moved right to make room for label
-	filterButton.BackgroundColor3 = Color3.fromRGB(80, 60, 80) -- Purple-ish color to distinguish from sort
+	filterButton.Size = UDim2.new(0, isVerySmallScreen and 90 or 120, 1, 0)
+	filterButton.Position = UDim2.new(0, isVerySmallScreen and 260 or 360, 0, 0)
+	filterButton.BackgroundColor3 = Color3.fromRGB(80, 60, 80)
 	filterButton.BorderSizePixel = 0
 	filterButton.Text = "All Locations"
 	filterButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	filterButton.TextSize = math.floor(11 * textScale)
+	filterButton.TextSize = math.floor((isVerySmallScreen and 9 or 11) * textScale)
 	filterButton.Font = Enum.Font.Gotham
 	filterButton.Parent = sortFrame
 	
@@ -241,14 +282,14 @@ local function createJobMenuGui()
 		filterOptionButtons[option.value] = optionButton
 	end
 	
-	-- Job list frame with scrolling
+	-- Job list frame with scrolling and responsive sizing
 	local scrollFrame = Instance.new("ScrollingFrame")
 	scrollFrame.Name = "JobListFrame"
-	scrollFrame.Size = UDim2.new(1, -20, 1, -120) -- Adjusted for sort dropdown
-	scrollFrame.Position = UDim2.new(0, 10, 0, 100) -- Moved down for sort dropdown
+	scrollFrame.Size = UDim2.new(1, -20, 1, -(isVerySmallScreen and 90 or 120))
+	scrollFrame.Position = UDim2.new(0, 10, 0, isVerySmallScreen and 85 or 100)
 	scrollFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	scrollFrame.BorderSizePixel = 0
-	scrollFrame.ScrollBarThickness = 12
+	scrollFrame.ScrollBarThickness = isVerySmallScreen and 8 or 12
 	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
 	scrollFrame.Parent = mainFrame
 	
@@ -262,10 +303,10 @@ local function createJobMenuGui()
 	layout.Padding = UDim.new(0, 5)
 	layout.Parent = scrollFrame
 	
-	-- Job template (hidden)
+	-- Job template with responsive sizing (hidden)
 	local jobTemplate = Instance.new("TextButton")
 	jobTemplate.Name = "JobTemplate"
-	jobTemplate.Size = UDim2.new(1, -10, 0, 60)
+	jobTemplate.Size = UDim2.new(1, -10, 0, isVerySmallScreen and 50 or 60)
 	jobTemplate.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 	jobTemplate.BorderSizePixel = 0
 	jobTemplate.Text = ""
@@ -276,28 +317,28 @@ local function createJobMenuGui()
 	templateCorner.CornerRadius = UDim.new(0, 5)
 	templateCorner.Parent = jobTemplate
 	
-	-- Job title label
+	-- Job title label with responsive sizing
 	local jobTitle = Instance.new("TextLabel")
 	jobTitle.Name = "JobTitle"
-	jobTitle.Size = UDim2.new(1, -20, 0, 30)
+	jobTitle.Size = UDim2.new(1, -20, 0, isVerySmallScreen and 25 or 30)
 	jobTitle.Position = UDim2.new(0, 10, 0, 5)
 	jobTitle.BackgroundTransparency = 1
 	jobTitle.Text = "Job Name"
 	jobTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	jobTitle.TextSize = math.floor(16 * textScale)
+	jobTitle.TextSize = math.floor((isVerySmallScreen and 14 or 16) * textScale)
 	jobTitle.Font = Enum.Font.GothamBold
 	jobTitle.TextXAlignment = Enum.TextXAlignment.Left
 	jobTitle.Parent = jobTemplate
 	
-	-- Job details label
+	-- Job details label with responsive sizing
 	local jobDetails = Instance.new("TextLabel")
 	jobDetails.Name = "JobDetails"
-	jobDetails.Size = UDim2.new(1, -20, 0, 25)
-	jobDetails.Position = UDim2.new(0, 10, 0, 30)
+	jobDetails.Size = UDim2.new(1, -20, 0, isVerySmallScreen and 20 or 25)
+	jobDetails.Position = UDim2.new(0, 10, 0, isVerySmallScreen and 25 or 30)
 	jobDetails.BackgroundTransparency = 1
 	jobDetails.Text = "Details"
 	jobDetails.TextColor3 = Color3.fromRGB(200, 200, 200)
-	jobDetails.TextSize = math.floor(14 * textScale)
+	jobDetails.TextSize = math.floor((isVerySmallScreen and 12 or 14) * textScale)
 	jobDetails.Font = Enum.Font.Gotham
 	jobDetails.TextXAlignment = Enum.TextXAlignment.Left
 	jobDetails.Parent = jobTemplate
@@ -587,7 +628,7 @@ local function createJobButton(job, sortOrder)
 	return newButton
 end
 
--- Open job menu
+-- Open job menu with responsive layout
 local function openJobMenu()
 	-- Clear any old job buttons (except the template)
 	for _, child in ipairs(scrollFrame:GetChildren()) do
@@ -616,8 +657,9 @@ local function openJobMenu()
 		end
 	end
 	
-	-- Update scroll frame size
-	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #jobs * 65 + 10)
+	-- Update scroll frame size with responsive job height
+	local jobHeight = isVerySmallScreen and 55 or 65
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #jobs * jobHeight + 10)
 	
 	-- Show menu
 	jobMenuGui.Enabled = true
