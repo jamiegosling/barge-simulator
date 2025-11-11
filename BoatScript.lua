@@ -1,632 +1,109 @@
+-- BoatScript.lua (Refactored)
+-- Main boat controller - orchestrates all boat systems
+
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
+-- Import boat modules
+local BoatPhysics = require(ReplicatedStorage.Shared.Modules.Boat.BoatPhysics)
+local BoatFuel = require(ReplicatedStorage.Shared.Modules.Boat.BoatFuel)
+local BoatCargo = require(ReplicatedStorage.Shared.Modules.Boat.BoatCargo)
+local BoatHUD = require(ReplicatedStorage.Shared.Modules.Boat.BoatHUD)
+local BoatAudio = require(ReplicatedStorage.Shared.Modules.Boat.BoatAudio)
+local BoatControls = require(ReplicatedStorage.Shared.Modules.Boat.BoatControls)
+
+-- ==================== BOAT COMPONENTS ==================== --
 local Engine = script.Parent.Parent.BargeEngine.BodyThrust
 local SForce = script.Parent.Parent.BargeSteer.BodyAngularVelocity
 local DSeat = script.Parent
 local Base = script.Parent.Parent.Barge
+local boat = DSeat.Parent
 
 -- Disable built-in HUD
 DSeat.HeadsUpDisplay = false
 
--- ==================== VARIABLES ==================== --
-local currentSpeed = 0
-local movementDirection = 0
-local baseMaxSpeed = 18000
-local maxSpeed = baseMaxSpeed
-SteerSpeed = 500
-BaseDensity = .1
-local MIN_STEER_SPEED = 1
-
--- Cargo variables
-local baseMaxCargo = 100
-local maxCargo = baseMaxCargo
-local baseCurrentCargo = 0
-local currentCargo = baseCurrentCargo
-
--- Fuel variables
-local baseMaxFuel = 200
-local maxFuel = baseMaxFuel
-local baseCurrentFuel = 100
-local currentFuel = baseCurrentFuel
-
--- Fuel consumption variables
-local FUEL_CONSUMPTION_RATE = 0.025  -- Fuel consumed per stud traveled
-local lastPosition = nil
-local totalDistanceTraveled = 0
-
--- Track fuel-empty state to trigger throttle updates without input
-local outOfFuel = (currentFuel <= 0)
-
--- ==================== TOUCH CONTROL VARIABLES ==================== --
+-- ==================== CONSTANTS ==================== --
 local isTouchDevice = UserInputService.TouchEnabled
-local smoothedSteerFloat = 0
-local smoothedThrottleFloat = 0
-local steeringSmoothingFactor = isTouchDevice and 0.1 or 1.0  -- More smoothing for touch
-local throttleSmoothingFactor = isTouchDevice and 0.2 or 1.0   -- More smoothing for touch
-local touchSteerDeadZone = isTouchDevice and 0.1 or 0.01     -- Larger dead zone for touch
-local touchThrottleDeadZone = isTouchDevice and 0.08 or 0.01   -- Larger dead zone for touch
+BaseDensity = .1
 
--- On-screen controls config moved to BoatControlsClient.client.lua
+-- ==================== INITIALIZE MODULES ==================== --
 
--- ==================== REMOTE EVENTS ==================== --
--- Create RemoteEvent for on-screen controls communication
-local controlEvent = script:FindFirstChild("ControlEvent")
-if not controlEvent then
-	controlEvent = Instance.new("RemoteEvent")
-	controlEvent.Name = "ControlEvent"
-	controlEvent.Parent = script
-end
+-- Initialize Physics Module
+BoatPhysics.Initialize({
+	Engine = Engine,
+	SForce = SForce,
+	DSeat = DSeat,
+	Base = Base,
+	script = script,
+	isTouchDevice = isTouchDevice,
+	baseMaxSpeed = 18000,
+	SteerSpeed = 500
+})
 
--- -- Runtime steering adjustment (for testing)
--- UserInputService.InputBegan:Connect(function(input)
--- 	if input.KeyCode == Enum.KeyCode.KeypadOne then
--- 		steeringSmoothingFactor = math.max(0.05, steeringSmoothingFactor - 0.05)
--- 		print("Steering smoothing decreased to:", steeringSmoothingFactor)
--- 	elseif input.KeyCode == Enum.KeyCode.KeypadTwo then
--- 		steeringSmoothingFactor = math.min(1.0, steeringSmoothingFactor + 0.05)
--- 		print("Steering smoothing increased to:", steeringSmoothingFactor)
--- 	end
--- end)
+-- Initialize Fuel Module
+BoatFuel.Initialize({
+	boat = boat,
+	script = script,
+	baseMaxFuel = 200,
+	baseCurrentFuel = 100
+})
 
--- Prevent UpdateFuel from overriding purchased fuel
-local function isFuelPurchaseInProgress()
-	local purchaseFlag = script:FindFirstChild("FuelPurchaseInProgress")
-	return purchaseFlag and purchaseFlag.Value == true
-end
+-- Initialize Cargo Module
+BoatCargo.Initialize({
+	boat = boat,
+	script = script,
+	baseMaxCargo = 100,
+	baseCurrentCargo = 0
+})
 
--- Listen for FuelAmount changes on the boat to update currentFuel directly
-local boat = DSeat.Parent
-local fuelAmount = boat:FindFirstChild("FuelAmount")
-if fuelAmount then
-	fuelAmount.Changed:Connect(function(newValue)
-		currentFuel = newValue
-	end)
-end
+-- Initialize HUD Module
+BoatHUD.Initialize({
+	DSeat = DSeat
+})
 
--- Get upgrade values
-local OriginalMaxSpeed = script:FindFirstChild("OriginalMaxSpeed")
-local SpeedMultiplier = script:FindFirstChild("SpeedMultiplier")
-local OriginalCargoCapacity = script:FindFirstChild("OriginalCargoCapacity")  -- Fixed: match UpgradeManager
-local CargoMultiplier = script:FindFirstChild("CargoMultiplier")
-local InitialCargo = script:FindFirstChild("InitialCargo")
-local OriginalFuelCapacity = script:FindFirstChild("OriginalFuelCapacity")  -- Fixed: match UpgradeManager  
-local FuelMultiplier = script:FindFirstChild("FuelMultiplier")
-local InitialFuel = script:FindFirstChild("InitialFuel")
-local FuelConsumptionRate = script:FindFirstChild("FuelConsumptionRate")
+-- Initialize Audio Module
+BoatAudio.Initialize({
+	Base = Base,
+	DSeat = DSeat
+})
 
--- Set fuel consumption rate
-if FuelConsumptionRate then
-	FUEL_CONSUMPTION_RATE = FuelConsumptionRate.Value
-end
-
--- Set initial speed values
-if OriginalMaxSpeed then
-	baseMaxSpeed = OriginalMaxSpeed.Value
-end
-if SpeedMultiplier then
-	maxSpeed = baseMaxSpeed * SpeedMultiplier.Value
-else
-	maxSpeed = baseMaxSpeed
-end
-
--- Set initial cargo values
-if OriginalCargoCapacity then
-	baseMaxCargo = OriginalCargoCapacity.Value
-end
-if CargoMultiplier then
-	maxCargo = baseMaxCargo * CargoMultiplier.Value
-else
-	maxCargo = baseMaxCargo
-end
-if InitialCargo then
-	currentCargo = InitialCargo.Value
-else
-	currentCargo = baseCurrentCargo
-end
-
--- Set initial fuel values
-if OriginalFuelCapacity then
-	baseMaxFuel = OriginalFuelCapacity.Value
-end
-if FuelMultiplier then
-	maxFuel = baseMaxFuel * FuelMultiplier.Value
-else
-	maxFuel = baseMaxFuel
-end
-if InitialFuel then
-	currentFuel = InitialFuel.Value
-	print("⛽ Initial fuel set from InitialFuel:", currentFuel)
-else
-	currentFuel = baseCurrentFuel
-	print("⛽ Initial fuel set to default:", currentFuel)
-end
-
--- ==================== GUI VARIABLES ==================== --
-local screenGui = nil
-local hudFrame = nil
-local speedLabel = nil
-local cargoLabel = nil
-local fuelLabel = nil
-
--- Control button states (updated by RemoteEvent from client)
-local isForwardPressed = false
-local isBackwardPressed = false
-local isLeftPressed = false
-local isRightPressed = false
-
--- ==================== ENGINE SOUND VARIABLES ==================== --
-local engineSound = nil
-local engineIdleSoundId = "rbxassetid://98076378627817"  -- Low engine idle sound
-local engineActiveSoundId = "rbxassetid://98076378627817"  -- Same sound but with adjusted pitch
-local isEngineRunning = false
-local targetPitch = 1.0
-local currentPitch = 1.0
-local pitchSmoothingSpeed = 0.1
-
--- ==================== HELPER FUNCTIONS ==================== --
-
--- Function to update DSeat inputs based on on-screen control states (SERVER-SIDE)
-local function updateControlInputs()
-	if not DSeat.Occupant then return end
-	
-	-- Only override seat controls if on-screen controls are being used
-	local anyControlPressed = isForwardPressed or isBackwardPressed or isLeftPressed or isRightPressed
-	if not anyControlPressed then
-		return -- Let keyboard/gamepad controls work normally
-	end
-	
-	-- Calculate throttle (forward/backward)
-	local throttle = 0
-	if isForwardPressed then
-		throttle = throttle + 1
-	end
-	if isBackwardPressed then
-		throttle = throttle - 1
-	end
-	DSeat.ThrottleFloat = throttle
-	
-	-- Calculate steer (left/right)
-	local steer = 0
-	if isLeftPressed then
-		steer = steer - 1
-	end
-	if isRightPressed then
-		steer = steer + 1
-	end
-	DSeat.SteerFloat = steer
-end
-
--- Server-side: Listen for control input from client
-controlEvent.OnServerEvent:Connect(function(player, action, pressed)
-	-- Verify the player is in this boat's seat
-	if DSeat.Occupant and Players:GetPlayerFromCharacter(DSeat.Occupant.Parent) == player then
-		if action == "Forward" then
-			isForwardPressed = pressed
-			print("🎮 Server: Forward =", pressed)
-		elseif action == "Backward" then
-			isBackwardPressed = pressed
-			print("🎮 Server: Backward =", pressed)
-		elseif action == "Left" then
-			isLeftPressed = pressed
-			print("🎮 Server: Left =", pressed)
-		elseif action == "Right" then
-			isRightPressed = pressed
-			print("🎮 Server: Right =", pressed)
-		end
-		-- updateControlInputs() now called continuously in Heartbeat loop
-	end
-end)
-
--- Function to initialize engine sound
-local function initializeEngineSound()
-	if engineSound then return end
-	
-	engineSound = Instance.new("Sound")
-	engineSound.Name = "EngineSound"
-	engineSound.SoundId = engineIdleSoundId
-	engineSound.Volume = 0.3
-	engineSound.Pitch = 1.0
-	engineSound.Looped = true
-	engineSound.Parent = Base
-end
-
--- Function to start engine sound
-local function startEngineSound()
-	if not engineSound then
-		initializeEngineSound()
-	end
-	
-	if not engineSound.IsPlaying and DSeat.Occupant then
-		engineSound:Play()
-		isEngineRunning = true
-	end
-end
-
--- Function to stop engine sound
-local function stopEngineSound()
-	if engineSound and engineSound.IsPlaying then
-		engineSound:Stop()
-		isEngineRunning = false
-	end
-end
-
--- Function to update engine pitch based on throttle
-local function updateEngineSound()
-	if not engineSound or not isEngineRunning then return end
-	
-	-- Calculate target pitch based on throttle
-	local throttleAmount = math.abs(smoothedThrottleFloat)
-	if throttleAmount > 0.01 then
-		-- Engine speeds up when throttle is applied
-		targetPitch = 1.0 + (throttleAmount * 0.3)  -- Pitch ranges from 1.0 to 1.3
-	else
-		-- Return to idle pitch
-		targetPitch = 1.0
-	end
-	
-	-- Smooth pitch transitions
-	currentPitch = currentPitch + (targetPitch - currentPitch) * pitchSmoothingSpeed
-	engineSound.Pitch = currentPitch
-end
-
--- Function to create GUI for a player
-local function createGUIForPlayer(player)
-	local playerGui = player:WaitForChild("PlayerGui")
-
-	-- Remove old GUI if it exists
-	local oldGui = playerGui:FindFirstChild("BoatHUD")
-	if oldGui then
-		oldGui:Destroy()
-	end
-
-	-- Create HUD GUI
-	screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "BoatHUD"
-	screenGui.Parent = playerGui
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.ResetOnSpawn = false
-	screenGui.Enabled = true -- Start enabled
-	screenGui.DisplayOrder = -1 -- Render below other menus
-
-	-- Simple container frame
-	hudFrame = Instance.new("Frame")
-	hudFrame.Name = "HUDContainer"
-	hudFrame.Size = UDim2.new(0, 200, 0, 100)
-	hudFrame.Position = UDim2.new(0, 50, 0, 50)
-	hudFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	hudFrame.BackgroundTransparency = 0.2
-	hudFrame.BorderSizePixel = 2
-	hudFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-	hudFrame.Visible = true
-	hudFrame.Parent = screenGui
-
-	-- Speed display
-	speedLabel = Instance.new("TextLabel")
-	speedLabel.Name = "SpeedDisplay"
-	speedLabel.Size = UDim2.new(1, -10, 0, 30)
-	speedLabel.Position = UDim2.new(0, 5, 0, 5)
-	speedLabel.BackgroundTransparency = 1
-	speedLabel.Text = "🚤 Speed: 0 studs/s"
-	speedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	speedLabel.TextSize = 18
-	speedLabel.Font = Enum.Font.SourceSansBold
-	speedLabel.Visible = true
-	speedLabel.Parent = hudFrame
-
-	-- Cargo display
-	cargoLabel = Instance.new("TextLabel")
-	cargoLabel.Name = "CargoDisplay"
-	cargoLabel.Size = UDim2.new(1, -10, 0, 30)
-	cargoLabel.Position = UDim2.new(0, 5, 0, 35)
-	cargoLabel.BackgroundTransparency = 1
-	cargoLabel.Text = "📦 Max Cargo: 100"
-	cargoLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-	cargoLabel.TextSize = 16
-	cargoLabel.Font = Enum.Font.SourceSans
-	cargoLabel.Visible = true
-	cargoLabel.Parent = hudFrame
-
-	-- Fuel display
-	fuelLabel = Instance.new("TextLabel")
-	fuelLabel.Name = "FuelDisplay"
-	fuelLabel.Size = UDim2.new(1, -10, 0, 30)
-	fuelLabel.Position = UDim2.new(0, 5, 0, 65)
-	fuelLabel.BackgroundTransparency = 1
-	fuelLabel.Text = "⛽ Fuel: 100/200"
-	fuelLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-	fuelLabel.TextSize = 16
-	fuelLabel.Font = Enum.Font.SourceSans
-	fuelLabel.Visible = true
-	fuelLabel.Parent = hudFrame
-
-	-- Note: On-screen controls are now handled by BoatControlsClient.client.lua
-	-- The client script will detect this BoatHUD and add controls
-
-	print("🖥️ HUD GUI created for player:", player.Name)
-	print("   - ScreenGui Parent:", screenGui.Parent:GetFullName())
-	print("   - ScreenGui Enabled:", screenGui.Enabled)
-	print("   - HudFrame Visible:", hudFrame.Visible)
-	print("   - Children count:", #hudFrame:GetChildren())
-end
-
--- Function to get upgrade values from boat
-local function getUpgradeValues()
-	local boat = DSeat.Parent
-	local values = {}
-
-	-- Get cargo values - use local variables with fallback to boat values
-	local cargoAmount = boat:FindFirstChild("CargoAmount")
-	local maxCargoValue = boat:FindFirstChild("MaxCargo")
-	local originalCargo = boat:FindFirstChild("OriginalCargoCapacity")
-	local cargoMultiplier = script:FindFirstChild("CargoMultiplier")  -- Fixed: look in script, not boat
-
-	if cargoAmount then
-		values.currentCargo = cargoAmount.Value
-	else
-		values.currentCargo = currentCargo
-	end
-
-	if maxCargoValue then
-		values.maxCargo = maxCargoValue.Value
-	elseif originalCargo and cargoMultiplier then
-		values.maxCargo = originalCargo.Value * cargoMultiplier.Value
-	else
-		values.maxCargo = maxCargo
-	end
-
-	-- Get fuel values - use local variables with fallback to boat values
-	local fuelAmount = boat:FindFirstChild("FuelAmount")
-	local maxFuelValue = boat:FindFirstChild("MaxFuel")
-	local originalFuel = boat:FindFirstChild("OriginalFuelCapacity")
-	local fuelMultiplier = script:FindFirstChild("FuelMultiplier")  -- Fixed: look in script, not boat
-
-	if fuelAmount then
-		values.currentFuel = fuelAmount.Value
-	else
-		values.currentFuel = currentFuel
-	end
-
-	if maxFuelValue then
-		values.maxFuel = maxFuelValue.Value
-	elseif originalFuel and fuelMultiplier then
-		values.maxFuel = originalFuel.Value * fuelMultiplier.Value
-	else
-		values.maxFuel = maxFuel
-	end
-
-	return values
-end
-
--- Update HUD displays
-local function updateHUD()
-	if not DSeat.Occupant then
-		if screenGui then
-			screenGui.Enabled = false
-		end
-		return
-	end
-
-	-- Create GUI if it doesn't exist
-	if not screenGui or not screenGui.Parent then
-		local player = Players:GetPlayerFromCharacter(DSeat.Occupant.Parent)
-		if player then
-			createGUIForPlayer(player)
-		end
-	end
-
-	if screenGui then
-		screenGui.Enabled = true
-
-		-- Update speed
-		if speedLabel then
-			local speed = math.abs(currentSpeed or 0)
-			speedLabel.Text = "🚤 Speed: " .. math.floor(speed) .. " studs/s"
-		end
-
-		-- Update cargo and fuel
-		if cargoLabel and fuelLabel then
-			local values = getUpgradeValues()
-			cargoLabel.Text = "📦 Max Cargo: " .. math.floor(values.maxCargo)
-
-			fuelLabel.Text = "⛽ Fuel: " .. math.floor(values.currentFuel) .. "/" .. math.floor(values.maxFuel)
-
-			-- Change fuel color based on level
-			local fuelPercent = (values.currentFuel / values.maxFuel) * 100
-			if fuelPercent <= 20 then
-				fuelLabel.TextColor3 = Color3.fromRGB(255, 100, 100) -- Red
-			elseif fuelPercent <= 50 then
-				fuelLabel.TextColor3 = Color3.fromRGB(255, 200, 100) -- Orange
-			else
-				fuelLabel.TextColor3 = Color3.fromRGB(100, 255, 100) -- Green
-			end
-		end
-	end
-end
-
--- ==================== INPUT SMOOTHING ==================== --
-
--- Function to smooth input values for better touch control
-local function smoothInput(rawValue, smoothedValue, smoothingFactor)
-	return smoothedValue + (rawValue - smoothedValue) * smoothingFactor
-end
-
--- Function to apply dead zone to input
-local function applyDeadZone(value, deadZone)
-	if math.abs(value) < deadZone then
-		return 0
-	end
-	return value
-end
-
--- ==================== STEERING AND THROTTLE ==================== --
-
--- Function to handle all steering logic
-local function UpdateSteering(speed)
-	local angularVelocity = Vector3.new(0, 0, 0)
-
-	-- Apply dead zone and smoothing to steering input
-	local rawSteer = DSeat.SteerFloat
-	local deadZoneSteer = applyDeadZone(rawSteer, touchSteerDeadZone)
-	smoothedSteerFloat = smoothInput(deadZoneSteer, smoothedSteerFloat, steeringSmoothingFactor)
-
-	if movementDirection ~= 0 and math.abs(smoothedSteerFloat) > 0.01 then
-		-- Quadratic curve - steering grows faster at higher speeds
-		local speedFactor = math.min((math.abs(speed) / 50) ^ 2, 1)
-		local adjustedSteerSpeed = SteerSpeed * speedFactor
-
-		angularVelocity = Vector3.new(0, -adjustedSteerSpeed * smoothedSteerFloat * movementDirection, 0)
-	end
-
-	SForce.AngularVelocity = angularVelocity
-end
-
--- Function to handle all throttle logic
-local function UpdateThrottle()
-	local currentMultiplier = script:FindFirstChild("SpeedMultiplier")
-	if currentMultiplier then
-		maxSpeed = baseMaxSpeed * currentMultiplier.Value
-	else
-		maxSpeed = baseMaxSpeed
-	end
-
-	-- Reduce speed to original if fuel is empty
-	local effectiveMaxSpeed = maxSpeed
-	if currentFuel <= 0 then
-		effectiveMaxSpeed = baseMaxSpeed * 0.75  -- Half of original speed
-	end
-
-	-- Apply dead zone and smoothing to throttle input
-	local rawThrottle = DSeat.ThrottleFloat
-	local deadZoneThrottle = applyDeadZone(rawThrottle, touchThrottleDeadZone)
-	smoothedThrottleFloat = smoothInput(deadZoneThrottle, smoothedThrottleFloat, throttleSmoothingFactor)
-
-	Engine.Force = Vector3.new(0, 0, effectiveMaxSpeed * smoothedThrottleFloat)
-	
-	-- Update engine sound based on throttle
-	updateEngineSound()
-	
-	UpdateSteering(currentSpeed)
-end
-
--- Function to update cargo values
-local function UpdateCargo()
-	local currentMultiplier = script:FindFirstChild("CargoMultiplier")
-	if currentMultiplier then
-		maxCargo = baseMaxCargo * currentMultiplier.Value
-	else
-		maxCargo = baseMaxCargo
-	end
-	
-	-- Update current cargo from boat if it exists
-	local boat = DSeat.Parent
-	local cargoAmount = boat:FindFirstChild("CargoAmount")
-	if cargoAmount then
-		currentCargo = cargoAmount.Value
-	end
-end
-
--- Function to update fuel values
-local function UpdateFuel()
-	local currentMultiplier = script:FindFirstChild("FuelMultiplier")
-	if currentMultiplier then
-		maxFuel = baseMaxFuel * currentMultiplier.Value
-	else
-		maxFuel = baseMaxFuel
-	end
-	
-	-- Skip updating if fuel purchase is in progress
-	if isFuelPurchaseInProgress() then
-		return
-	end
-	
-	-- Update current fuel - prioritize FuelAmount from boat (live value), then InitialFuel from script
-	local boat = DSeat.Parent
-	local fuelAmount = boat:FindFirstChild("FuelAmount")
-	if fuelAmount then
-		currentFuel = fuelAmount.Value
-	else
-		-- Fallback to InitialFuel if FuelAmount doesn't exist
-		local initialFuelValue = script:FindFirstChild("InitialFuel")
-		if initialFuelValue then
-			currentFuel = initialFuelValue.Value
-			-- Create FuelAmount on boat if it doesn't exist
-			local boat = DSeat.Parent
-			if not boat:FindFirstChild("FuelAmount") then
-				local newFuelAmount = Instance.new("NumberValue")
-				newFuelAmount.Name = "FuelAmount"
-				newFuelAmount.Value = currentFuel
-				newFuelAmount.Parent = boat
-			end
-		end
-	end
-end
+-- Initialize Controls Module
+BoatControls.Initialize({
+	DSeat = DSeat,
+	script = script
+})
 
 -- ==================== CONNECTIONS ==================== --
 
 -- Monitor velocity continuously
 local velocityConnection = RunService.Heartbeat:Connect(function()
-	-- Continuously apply on-screen control inputs
-	updateControlInputs()
+	-- Update on-screen control inputs
+	BoatControls.UpdateControlInputs()
 	
-	local partVelocity = Base.AssemblyLinearVelocity
-	local relativeVelocity = Base.CFrame:VectorToObjectSpace(partVelocity)
-	local forwardSpeed = relativeVelocity.X
-
-	currentSpeed = forwardSpeed
-
-	-- Fuel consumption based on distance traveled
-	local currentPosition = Base.Position
-	if lastPosition and DSeat.Occupant and math.abs(forwardSpeed) > MIN_STEER_SPEED then
-		local distance = (currentPosition - lastPosition).Magnitude
-		totalDistanceTraveled = totalDistanceTraveled + distance
-		
-		-- Consume fuel
-		local fuelToConsume = distance * FUEL_CONSUMPTION_RATE
-		local previousFuel = currentFuel
-		currentFuel = math.max(0, currentFuel - fuelToConsume)
-		
-		-- Update fuel amount on boat if it exists
-		local boat = DSeat.Parent
-		local fuelAmount = boat:FindFirstChild("FuelAmount")
-		if fuelAmount then
-			fuelAmount.Value = currentFuel
-		end
-		
-		-- Also update InitialFuel to keep DataStore in sync
-		local initialFuelValue = script:FindFirstChild("InitialFuel")
-		if initialFuelValue then
-			initialFuelValue.Value = currentFuel
-		end
-		
-		-- If fuel-empty state changed, update throttle immediately
-		local nowOutOfFuel = (currentFuel <= 0)
-		if nowOutOfFuel ~= outOfFuel then
-			outOfFuel = nowOutOfFuel
-			UpdateThrottle()
-		end
-	end
-	lastPosition = currentPosition
-
-	local newDirection = 0
-	if forwardSpeed > MIN_STEER_SPEED then
-		newDirection = 1
-	elseif forwardSpeed < -MIN_STEER_SPEED then
-		newDirection = -1
-	end
-
-	if newDirection ~= movementDirection then
-		movementDirection = newDirection
-		UpdateSteering(forwardSpeed)
-	else
-		UpdateSteering(forwardSpeed)
+	-- Update physics and get current speed/position
+	local currentSpeed, currentPosition = BoatPhysics.UpdateVelocity()
+	
+	-- Handle fuel consumption and distance tracking
+	local fuelStateChanged = BoatFuel.ConsumeFuel(currentPosition, DSeat.Occupant ~= nil, currentSpeed)
+	
+	-- If fuel state changed (ran out or refueled), update throttle
+	if fuelStateChanged then
+		BoatPhysics.UpdateThrottle(BoatFuel.GetCurrentFuel(), function(throttle)
+			BoatAudio.UpdateEngineSound(throttle)
+		end)
 	end
 end)
 
 -- Connect HUD updates to heartbeat
-local hudConnection = RunService.Heartbeat:Connect(updateHUD)
+local hudConnection = RunService.Heartbeat:Connect(function()
+	local currentSpeed = BoatPhysics.GetCurrentSpeed()
+	local cargoValues = BoatCargo.GetValues()
+	local fuelValues = BoatFuel.GetValues()
+	
+	BoatHUD.Update(currentSpeed, cargoValues, fuelValues)
+end)
 
 -- Show/hide HUD based on seat occupancy
 local seatConnection = DSeat:GetPropertyChangedSignal("Occupant"):Connect(function()
@@ -636,83 +113,69 @@ local seatConnection = DSeat:GetPropertyChangedSignal("Occupant"):Connect(functi
 		local player = Players:GetPlayerFromCharacter(DSeat.Occupant.Parent)
 		if player then
 			print("   Player found:", player.Name)
-			print("   Current fuel before UpdateFuel:", currentFuel)
+			
 			-- Update fuel values when player sits down
-			UpdateFuel()
-			print("   Current fuel after UpdateFuel:", currentFuel)
-			createGUIForPlayer(player)
+			BoatFuel.Update()
+			
+			-- Create GUI for player
+			BoatHUD.CreateGUIForPlayer(player)
+			
 			-- Start engine sound when player sits down
-			startEngineSound()
+			BoatAudio.StartEngineSound()
 		end
 	else
-		if screenGui then
-			screenGui:Destroy()
-			screenGui = nil
-			hudFrame = nil
-			speedLabel = nil
-			cargoLabel = nil
-			fuelLabel = nil
-		end
+		-- Destroy HUD
+		BoatHUD.Destroy()
+		
 		-- Reset control states
-		isForwardPressed = false
-		isBackwardPressed = false
-		isLeftPressed = false
-		isRightPressed = false
+		BoatControls.ResetControls()
+		
 		-- Stop engine sound when player gets up
-		stopEngineSound()
+		BoatAudio.StopEngineSound()
 	end
-
-	updateHUD()
 end)
 
 -- Handle seat input changes
 DSeat.Changed:Connect(function(p)
 	if p == "ThrottleFloat" then
-		UpdateThrottle()
+		BoatPhysics.UpdateThrottle(BoatFuel.GetCurrentFuel(), function(throttle)
+			BoatAudio.UpdateEngineSound(throttle)
+		end)
 	end
 	if p == "SteerFloat" then
-		UpdateSteering(currentSpeed)
+		BoatPhysics.UpdateSteering(BoatPhysics.GetCurrentSpeed())
 	end
 end)
 
 -- Handle upgrade changes
 script.ChildAdded:Connect(function(child)
-	if child.Name == "SpeedMultiplier" then
-		maxSpeed = baseMaxSpeed * child.Value
-		UpdateThrottle()
-	elseif child.Name == "CargoMultiplier" then
-		maxCargo = baseMaxCargo * child.Value
-		UpdateCargo()
-	elseif child.Name == "FuelMultiplier" then
-		maxFuel = baseMaxFuel * child.Value
-		UpdateFuel()
-	elseif child.Name == "InitialCargo" then
-		currentCargo = child.Value
-		UpdateCargo()
-	elseif child.Name == "InitialFuel" then
-		-- Only update if fuel purchase is not in progress
-		if not isFuelPurchaseInProgress() then
-			currentFuel = child.Value
-			-- Update boat's FuelAmount to match when InitialFuel changes
-			local boat = DSeat.Parent
-			local fuelAmount = boat:FindFirstChild("FuelAmount")
-			if fuelAmount then
-				fuelAmount.Value = currentFuel
-			end
+	if child.Name == "SpeedMultiplier" or child.Name == "CargoMultiplier" or child.Name == "FuelMultiplier" then
+		-- Update respective modules
+		BoatFuel.Update()
+		BoatCargo.Update()
+		
+		if child.Name == "SpeedMultiplier" then
+			BoatPhysics.UpdateThrottle(BoatFuel.GetCurrentFuel(), function(throttle)
+				BoatAudio.UpdateEngineSound(throttle)
+			end)
 		end
+	elseif child.Name == "InitialCargo" then
+		BoatCargo.Update()
+	elseif child.Name == "InitialFuel" then
+		BoatFuel.Update()
 	end
 end)
 
 script.ChildRemoved:Connect(function(child)
-	if child.Name == "SpeedMultiplier" then
-		maxSpeed = baseMaxSpeed
-		UpdateThrottle()
-	elseif child.Name == "CargoMultiplier" then
-		maxCargo = baseMaxCargo
-		UpdateCargo()
-	elseif child.Name == "FuelMultiplier" then
-		maxFuel = baseMaxFuel
-		UpdateFuel()
+	if child.Name == "SpeedMultiplier" or child.Name == "CargoMultiplier" or child.Name == "FuelMultiplier" then
+		BoatFuel.Update()
+		BoatCargo.Update()
+		
+		if child.Name == "SpeedMultiplier" then
+			BoatPhysics.UpdateThrottle(BoatFuel.GetCurrentFuel(), function(throttle)
+				BoatAudio.UpdateEngineSound(throttle)
+			end)
+		end
 	end
 end)
 
@@ -727,12 +190,8 @@ DSeat.Destroying:Connect(function()
 	if seatConnection then
 		seatConnection:Disconnect()
 	end
-	if screenGui then
-		screenGui:Destroy()
-	end
-	-- Clean up engine sound
-	if engineSound then
-		engineSound:Destroy()
-		engineSound = nil
-	end
+	
+	-- Clean up modules
+	BoatHUD.Destroy()
+	BoatAudio.Destroy()
 end)
