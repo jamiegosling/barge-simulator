@@ -30,7 +30,8 @@ local function applySpeedUpgrades(boat, player)
 	applyUpgrades(boat, player, "speed")
 end
 
-Players.PlayerAdded:Connect(function(player)
+-- Spawn boat for player (extracted function)
+local function spawnBoatForPlayer(player)
 	-- Clone boat
 	local boat = BoatTemplate:Clone()
 	boat.Name = "Boat_" .. player.Name
@@ -107,9 +108,10 @@ Players.PlayerAdded:Connect(function(player)
 			end
 		end)
 	end
-end)
+end
 
-Players.PlayerRemoving:Connect(function(player)
+-- Destroy boat for player (extracted function)
+local function destroyBoatForPlayer(player)
 	local playerBoat = BoatFolder:FindFirstChild("Boat_" .. player.Name)
 	if playerBoat then
 		-- Save fuel before destroying boat
@@ -127,4 +129,23 @@ Players.PlayerRemoving:Connect(function(player)
 		UpgradeManager.savePlayerUpgrades(player)
 		print("✅ BoatSpawner: Forced save after fuel update for", player.Name)
 	end
+end
+
+Players.PlayerAdded:Connect(function(player)
+	-- Wait for character to load before spawning boat
+	player.CharacterAdded:Connect(function(character)
+		print("🚤 Character loaded for", player.Name, "- spawning boat")
+		spawnBoatForPlayer(player)
+	end)
+	
+	-- Handle character death/respawn - destroy boat when character dies
+	player.CharacterRemoving:Connect(function(character)
+		print("💥 Character died/respawning for", player.Name, "- destroying boat")
+		destroyBoatForPlayer(player)
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	print("👋 Player leaving game:", player.Name, "- cleaning up boat")
+	destroyBoatForPlayer(player)
 end)

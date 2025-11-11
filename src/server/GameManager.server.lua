@@ -271,6 +271,29 @@ Players.PlayerAdded:Connect(function(player)
 	money.Name = "Money"
 	money.Value = 0
 	money.Parent = stats
+	
+	-- Handle character respawns - sync job state
+	player.CharacterAdded:Connect(function(character)
+		task.wait(1) -- Wait a moment for character to fully load
+		
+		local activeJob = ActiveJobs[player.UserId]
+		if activeJob then
+			print("🔄 Resyncing job state for respawning player:", player.Name)
+			if activeJob.loaded then
+				-- Player had loaded cargo, restore loaded state
+				JobStatus:FireClient(player, "loaded", activeJob.job)
+				-- Send guideline to destination
+				local destinationPosition = GetDeliveryZonePosition(activeJob.job.to)
+				UpdateJobDestination:FireClient(player, destinationPosition, false) -- false = delivery location
+			else
+				-- Player had accepted job but not loaded yet
+				JobStatus:FireClient(player, "accepted", activeJob.job)
+				-- Send guideline to pickup location
+				local pickupPosition = GetDeliveryZonePosition(activeJob.job.from)
+				UpdateJobDestination:FireClient(player, pickupPosition, true) -- true = pickup location
+			end
+		end
+	end)
 end)
 
 -- Clean up when players leave
