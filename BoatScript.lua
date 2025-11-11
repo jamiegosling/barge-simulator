@@ -140,7 +140,68 @@ local speedLabel = nil
 local cargoLabel = nil
 local fuelLabel = nil
 
+-- ==================== ENGINE SOUND VARIABLES ==================== --
+local engineSound = nil
+local engineIdleSoundId = "rbxassetid://98076378627817"  -- Low engine idle sound
+local engineActiveSoundId = "rbxassetid://98076378627817"  -- Same sound but with adjusted pitch
+local isEngineRunning = false
+local targetPitch = 1.0
+local currentPitch = 1.0
+local pitchSmoothingSpeed = 0.1
+
 -- ==================== HELPER FUNCTIONS ==================== --
+
+-- Function to initialize engine sound
+local function initializeEngineSound()
+	if engineSound then return end
+	
+	engineSound = Instance.new("Sound")
+	engineSound.Name = "EngineSound"
+	engineSound.SoundId = engineIdleSoundId
+	engineSound.Volume = 0.3
+	engineSound.Pitch = 1.0
+	engineSound.Looped = true
+	engineSound.Parent = Base
+end
+
+-- Function to start engine sound
+local function startEngineSound()
+	if not engineSound then
+		initializeEngineSound()
+	end
+	
+	if not engineSound.IsPlaying and DSeat.Occupant then
+		engineSound:Play()
+		isEngineRunning = true
+	end
+end
+
+-- Function to stop engine sound
+local function stopEngineSound()
+	if engineSound and engineSound.IsPlaying then
+		engineSound:Stop()
+		isEngineRunning = false
+	end
+end
+
+-- Function to update engine pitch based on throttle
+local function updateEngineSound()
+	if not engineSound or not isEngineRunning then return end
+	
+	-- Calculate target pitch based on throttle
+	local throttleAmount = math.abs(smoothedThrottleFloat)
+	if throttleAmount > 0.01 then
+		-- Engine speeds up when throttle is applied
+		targetPitch = 1.0 + (throttleAmount * 0.3)  -- Pitch ranges from 1.0 to 1.3
+	else
+		-- Return to idle pitch
+		targetPitch = 1.0
+	end
+	
+	-- Smooth pitch transitions
+	currentPitch = currentPitch + (targetPitch - currentPitch) * pitchSmoothingSpeed
+	engineSound.Pitch = currentPitch
+end
 
 -- Function to create GUI for a player
 local function createGUIForPlayer(player)
@@ -370,6 +431,10 @@ local function UpdateThrottle()
 	smoothedThrottleFloat = smoothInput(deadZoneThrottle, smoothedThrottleFloat, throttleSmoothingFactor)
 
 	Engine.Force = Vector3.new(0, 0, effectiveMaxSpeed * smoothedThrottleFloat)
+	
+	-- Update engine sound based on throttle
+	updateEngineSound()
+	
 	UpdateSteering(currentSpeed)
 end
 
@@ -500,6 +565,8 @@ local seatConnection = DSeat:GetPropertyChangedSignal("Occupant"):Connect(functi
 			UpdateFuel()
 			print("   Current fuel after UpdateFuel:", currentFuel)
 			createGUIForPlayer(player)
+			-- Start engine sound when player sits down
+			startEngineSound()
 		end
 	else
 		if screenGui then
@@ -510,6 +577,8 @@ local seatConnection = DSeat:GetPropertyChangedSignal("Occupant"):Connect(functi
 			cargoLabel = nil
 			fuelLabel = nil
 		end
+		-- Stop engine sound when player gets up
+		stopEngineSound()
 	end
 
 	updateHUD()
@@ -579,5 +648,10 @@ DSeat.Destroying:Connect(function()
 	end
 	if screenGui then
 		screenGui:Destroy()
+	end
+	-- Clean up engine sound
+	if engineSound then
+		engineSound:Destroy()
+		engineSound = nil
 	end
 end)
