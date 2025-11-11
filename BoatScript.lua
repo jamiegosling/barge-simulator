@@ -49,6 +49,17 @@ local throttleSmoothingFactor = isTouchDevice and 0.2 or 1.0   -- More smoothing
 local touchSteerDeadZone = isTouchDevice and 0.1 or 0.01     -- Larger dead zone for touch
 local touchThrottleDeadZone = isTouchDevice and 0.08 or 0.01   -- Larger dead zone for touch
 
+-- On-screen controls config moved to BoatControlsClient.client.lua
+
+-- ==================== REMOTE EVENTS ==================== --
+-- Create RemoteEvent for on-screen controls communication
+local controlEvent = script:FindFirstChild("ControlEvent")
+if not controlEvent then
+	controlEvent = Instance.new("RemoteEvent")
+	controlEvent.Name = "ControlEvent"
+	controlEvent.Parent = script
+end
+
 -- -- Runtime steering adjustment (for testing)
 -- UserInputService.InputBegan:Connect(function(input)
 -- 	if input.KeyCode == Enum.KeyCode.KeypadOne then
@@ -140,6 +151,12 @@ local speedLabel = nil
 local cargoLabel = nil
 local fuelLabel = nil
 
+-- Control button states (updated by RemoteEvent from client)
+local isForwardPressed = false
+local isBackwardPressed = false
+local isLeftPressed = false
+local isRightPressed = false
+
 -- ==================== ENGINE SOUND VARIABLES ==================== --
 local engineSound = nil
 local engineIdleSoundId = "rbxassetid://98076378627817"  -- Low engine idle sound
@@ -150,6 +167,58 @@ local currentPitch = 1.0
 local pitchSmoothingSpeed = 0.1
 
 -- ==================== HELPER FUNCTIONS ==================== --
+
+-- Function to update DSeat inputs based on on-screen control states (SERVER-SIDE)
+local function updateControlInputs()
+	if not DSeat.Occupant then return end
+	
+	-- Only override seat controls if on-screen controls are being used
+	local anyControlPressed = isForwardPressed or isBackwardPressed or isLeftPressed or isRightPressed
+	if not anyControlPressed then
+		return -- Let keyboard/gamepad controls work normally
+	end
+	
+	-- Calculate throttle (forward/backward)
+	local throttle = 0
+	if isForwardPressed then
+		throttle = throttle + 1
+	end
+	if isBackwardPressed then
+		throttle = throttle - 1
+	end
+	DSeat.ThrottleFloat = throttle
+	
+	-- Calculate steer (left/right)
+	local steer = 0
+	if isLeftPressed then
+		steer = steer - 1
+	end
+	if isRightPressed then
+		steer = steer + 1
+	end
+	DSeat.SteerFloat = steer
+end
+
+-- Server-side: Listen for control input from client
+controlEvent.OnServerEvent:Connect(function(player, action, pressed)
+	-- Verify the player is in this boat's seat
+	if DSeat.Occupant and Players:GetPlayerFromCharacter(DSeat.Occupant.Parent) == player then
+		if action == "Forward" then
+			isForwardPressed = pressed
+			print("🎮 Server: Forward =", pressed)
+		elseif action == "Backward" then
+			isBackwardPressed = pressed
+			print("🎮 Server: Backward =", pressed)
+		elseif action == "Left" then
+			isLeftPressed = pressed
+			print("🎮 Server: Left =", pressed)
+		elseif action == "Right" then
+			isRightPressed = pressed
+			print("🎮 Server: Right =", pressed)
+		end
+		-- updateControlInputs() now called continuously in Heartbeat loop
+	end
+end)
 
 -- Function to initialize engine sound
 local function initializeEngineSound()
@@ -220,6 +289,7 @@ local function createGUIForPlayer(player)
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.ResetOnSpawn = false
 	screenGui.Enabled = true -- Start enabled
+	screenGui.DisplayOrder = -1 -- Render below other menus
 
 	-- Simple container frame
 	hudFrame = Instance.new("Frame")
@@ -271,6 +341,9 @@ local function createGUIForPlayer(player)
 	fuelLabel.Font = Enum.Font.SourceSans
 	fuelLabel.Visible = true
 	fuelLabel.Parent = hudFrame
+
+	-- Note: On-screen controls are now handled by BoatControlsClient.client.lua
+	-- The client script will detect this BoatHUD and add controls
 
 	print("🖥️ HUD GUI created for player:", player.Name)
 	print("   - ScreenGui Parent:", screenGui.Parent:GetFullName())
@@ -495,6 +568,9 @@ end
 
 -- Monitor velocity continuously
 local velocityConnection = RunService.Heartbeat:Connect(function()
+	-- Continuously apply on-screen control inputs
+	updateControlInputs()
+	
 	local partVelocity = Base.AssemblyLinearVelocity
 	local relativeVelocity = Base.CFrame:VectorToObjectSpace(partVelocity)
 	local forwardSpeed = relativeVelocity.X
@@ -577,6 +653,11 @@ local seatConnection = DSeat:GetPropertyChangedSignal("Occupant"):Connect(functi
 			cargoLabel = nil
 			fuelLabel = nil
 		end
+		-- Reset control states
+		isForwardPressed = false
+		isBackwardPressed = false
+		isLeftPressed = false
+		isRightPressed = false
 		-- Stop engine sound when player gets up
 		stopEngineSound()
 	end
