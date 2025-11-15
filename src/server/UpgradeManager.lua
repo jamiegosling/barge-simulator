@@ -83,15 +83,18 @@ end
 
 -- Initialize player upgrades when they join
 local function initializePlayerUpgrades(player)
+	print("🎮 UpgradeManager: initializePlayerUpgrades called for", player.Name)
 	local userId = tostring(player.UserId)
 	
 	-- Check if we're in Studio and DataStore isn't available
 	local isStudio = game:GetService("RunService"):IsStudio()
 	
+	print("📊 UpgradeManager: Loading data from DataStore for", player.Name)
 	-- Load player data from DataStore
 	local success, data = pcall(function()
 		return upgradeDataStore:GetAsync(userId)
 	end)
+	print("📊 UpgradeManager: DataStore load result - success:", success, "data exists:", data ~= nil)
 	
 	if not success then
 		if isStudio and string.find(tostring(data), "StudioAccessToApisNotAllowed") then
@@ -165,7 +168,7 @@ local function initializePlayerUpgrades(player)
 		end
 	end
 	
-	print("Initialized upgrades for", player.Name, "Speed Level:", data.speedLevel or 1, "Cargo Level:", data.cargoLevel or 1, "Fuel Level:", data.fuelLevel or 1, "Money: £" .. (data.money or 0))
+	print("✅ Initialized upgrades for", player.Name, "Speed Level:", data.speedLevel or 1, "Cargo Level:", data.cargoLevel or 1, "Fuel Level:", data.fuelLevel or 1, "Money: £" .. (data.money or 0), "Current Fuel:", data.currentFuel or 100)
 	
 	-- Track money changes for auto-saving
 	local leaderstats = player:WaitForChild("leaderstats", 5)
@@ -183,7 +186,9 @@ local function initializePlayerUpgrades(player)
 	end
 	
 	-- Fire signal to indicate upgrade data is loaded
+	print("🔔 Firing upgradeDataLoaded event for", player.Name)
 	upgradeDataLoaded:Fire(player)
+	print("✅ upgradeDataLoaded event fired for", player.Name)
 end
 
 -- Save player upgrades to DataStore
@@ -358,11 +363,11 @@ local function setInitialFuel(boat, player)
 	local userId = tostring(player.UserId)
 	local upgrades = playerUpgrades[userId]
 	
-	print("Attempting to set initial fuel for", player.Name)
+	print("⛽ UpgradeManager.setInitialFuel: Attempting to set initial fuel for", player.Name)
 	if upgrades then
-		print("Found upgrades data, currentFuel:", upgrades.currentFuel)
+		print("⛽ UpgradeManager.setInitialFuel: Found upgrades data, currentFuel:", upgrades.currentFuel)
 	else
-		print("No upgrades data found for", player.Name)
+		warn("⛽ UpgradeManager.setInitialFuel: No upgrades data found for", player.Name)
 		return
 	end
 	
@@ -393,13 +398,20 @@ local function setInitialFuel(boat, player)
 				-- Also update the FuelAmount on the boat itself
 				local fuelAmount = boat:FindFirstChild("FuelAmount")
 				if fuelAmount then
+					print("⛽ UpgradeManager.setInitialFuel: Found FuelAmount, updating from", fuelAmount.Value, "to", upgrades.currentFuel)
 					fuelAmount.Value = upgrades.currentFuel
-					print("Updated boat FuelAmount to:", fuelAmount.Value)
+					print("⛽ UpgradeManager.setInitialFuel: Updated boat FuelAmount to:", fuelAmount.Value)
 				else
-					print("No FuelAmount found on boat")
+					warn("⛽ UpgradeManager.setInitialFuel: No FuelAmount found on boat, creating it")
+					-- Create it if it doesn't exist
+					local newFuelAmount = Instance.new("NumberValue")
+					newFuelAmount.Name = "FuelAmount"
+					newFuelAmount.Value = upgrades.currentFuel
+					newFuelAmount.Parent = boat
+					print("⛽ UpgradeManager.setInitialFuel: Created FuelAmount with value:", upgrades.currentFuel)
 				end
 				
-				print("Set InitialFuel for", player.Name, "to:", upgrades.currentFuel)
+				print("⛽ UpgradeManager.setInitialFuel: Set InitialFuel for", player.Name, "to:", upgrades.currentFuel)
 			else
 				print("No boat script found in VehicleSeat")
 			end
@@ -493,13 +505,23 @@ local function updatePlayerFuel(player, newFuelValue)
 	local upgrades = playerUpgrades[userId]
 	
 	if upgrades then
+		local oldFuel = upgrades.currentFuel
 		upgrades.currentFuel = newFuelValue
 		fuelChangeTimestamps[userId] = tick()  -- Mark time of change
+		print("⛽ UpgradeManager: Updated fuel for", player.Name, "from", oldFuel, "to", newFuelValue)
+	else
+		warn("⚠️ UpgradeManager: No upgrades data found for", player.Name, "when trying to update fuel")
 	end
 end
 
 -- Player events
 Players.PlayerAdded:Connect(initializePlayerUpgrades)
+
+-- Initialize players who are already in the game (important for Studio testing)
+for _, player in ipairs(Players:GetPlayers()) do
+	print("🔄 Initializing upgrades for player already in game:", player.Name)
+	initializePlayerUpgrades(player)
+end
 
 -- Note: PlayerRemoving save is now handled by BoatSpawner to ensure fuel is saved before boat destruction
 -- Players.PlayerRemoving:Connect(savePlayerUpgrades)

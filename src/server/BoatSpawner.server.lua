@@ -80,33 +80,56 @@ local function spawnBoatForPlayer(player)
 	boat:PivotTo(CFrame.new(spawnPos))
 
 	boat.Parent = BoatFolder
-	print("Spawned boat for", player.Name, "at position", spawnPos)
+	print("🚤 Spawned boat for", player.Name, "at position", spawnPos)
 	
 	-- Wait for upgrade data to be loaded before applying upgrades
-	upgradeDataLoaded.Event:Wait()
+	-- Check if data is already loaded (in case event fired before we started waiting)
+	local playerUpgrades = UpgradeManager.getPlayerUpgrades(player)
+	if not playerUpgrades then
+		print("⏳ Waiting for upgrade data to load for", player.Name)
+		upgradeDataLoaded.Event:Wait()
+		print("✅ Upgrade data loaded for", player.Name, "- applying upgrades")
+	else
+		print("✅ Upgrade data already loaded for", player.Name, "- applying upgrades")
+	end
+	
 	-- Apply all upgrades (speed, cargo, and fuel)
 	applyUpgrades(boat, player, "speed")
 	applyUpgrades(boat, player, "cargo_capacity")
 	applyUpgrades(boat, player, "fuel_capacity")
-	-- Set initial fuel from DataStore
-	UpgradeManager.setInitialFuel(boat, player)
-	print("Applied all upgrades to", player.Name .. "'s boat after data loaded")
 	
-	-- Monitor fuel changes periodically for this boat
+	-- Set initial fuel from DataStore
+	print("🔧 About to call setInitialFuel for", player.Name)
+	UpgradeManager.setInitialFuel(boat, player)
+	print("✅ Applied all upgrades to", player.Name .. "'s boat after data loaded")
+	
+	-- Monitor fuel changes using .Changed event
+	-- Wait a moment for BoatScript to initialize and create FuelAmount
+	task.wait(0.5)
 	local fuelAmount = boat:FindFirstChild("FuelAmount")
 	if fuelAmount then
-		-- Track fuel changes every 5 seconds
-		task.spawn(function()
-			local lastFuelValue = fuelAmount.Value
-			while boat.Parent and player.Parent do
-				task.wait(5)
-				if fuelAmount.Value ~= lastFuelValue then
-					-- Fuel changed, update the tracking system
-					UpgradeManager.updatePlayerFuel(player, fuelAmount.Value)
-					lastFuelValue = fuelAmount.Value
-				end
+		print("⛽ BoatSpawner: Starting fuel monitoring for", player.Name, "initial value:", fuelAmount.Value)
+		
+		-- Track last update time to avoid excessive saves
+		local lastUpdateTime = 0  -- Start at 0 so first change updates immediately
+		local lastSavedValue = fuelAmount.Value
+		local UPDATE_THROTTLE = 1  -- Update at most every 1 second
+		
+		-- Use .Changed event for immediate updates
+		fuelAmount.Changed:Connect(function(newValue)
+			local currentTime = tick()
+			-- Only update if enough time has passed AND value actually changed significantly
+			if currentTime - lastUpdateTime >= UPDATE_THROTTLE and math.abs(newValue - lastSavedValue) > 0.1 then
+				print("⛽ BoatSpawner: Fuel changed for", player.Name, "from", lastSavedValue, "to", newValue)
+				UpgradeManager.updatePlayerFuel(player, newValue)
+				lastUpdateTime = currentTime
+				lastSavedValue = newValue
 			end
 		end)
+		
+		print("⛽ BoatSpawner: Fuel monitoring active with 1-second throttle")
+	else
+		warn("⚠️ BoatSpawner: No FuelAmount found on boat for", player.Name, "after waiting")
 	end
 end
 

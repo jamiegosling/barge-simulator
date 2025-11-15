@@ -43,21 +43,46 @@ function BoatFuel.Initialize(config)
 		maxFuel = baseMaxFuel
 	end
 	
-	local InitialFuel = config.script:FindFirstChild("InitialFuel")
-	if InitialFuel then
-		currentFuel = InitialFuel.Value
-		print("⛽ Initial fuel set from InitialFuel:", currentFuel)
+	-- Create or get FuelAmount on the boat
+	local fuelAmount = config.boat:FindFirstChild("FuelAmount")
+	if not fuelAmount then
+		fuelAmount = Instance.new("NumberValue")
+		fuelAmount.Name = "FuelAmount"
+		fuelAmount.Value = 0  -- Start at 0, will be set by UpgradeManager.setInitialFuel()
+		fuelAmount.Parent = config.boat
+		print("⛽ Created FuelAmount on boat, waiting for saved value from DataStore")
 	else
-		currentFuel = config.baseCurrentFuel or 100
-		print("⛽ Initial fuel set to default:", currentFuel)
+		print("⛽ Found existing FuelAmount on boat with value:", fuelAmount.Value, "(will be updated from DataStore)")
 	end
 	
-	-- Listen for FuelAmount changes on the boat
-	local fuelAmount = config.boat:FindFirstChild("FuelAmount")
-	if fuelAmount then
-		fuelAmount.Changed:Connect(function(newValue)
-			currentFuel = newValue
-		end)
+	-- Listen for FuelAmount changes (e.g., from UpgradeManager.setInitialFuel or fuel purchases)
+	fuelAmount.Changed:Connect(function(newValue)
+		currentFuel = newValue
+		-- print("⛽ FuelAmount changed to:", newValue)
+		
+		-- Update InitialFuel in script to keep it in sync
+		local InitialFuel = config.script:FindFirstChild("InitialFuel")
+		if InitialFuel then
+			InitialFuel.Value = newValue
+		end
+	end)
+	
+	-- Check if InitialFuel already exists (in case it was set before this script ran)
+	local InitialFuel = config.script:FindFirstChild("InitialFuel")
+	if InitialFuel and InitialFuel.Value > 0 then
+		-- InitialFuel was already set, use it immediately
+		currentFuel = InitialFuel.Value
+		fuelAmount.Value = currentFuel
+		print("⛽ Loaded initial fuel from InitialFuel:", currentFuel)
+	else
+		-- Wait for UpgradeManager to set the value
+		-- Use the existing FuelAmount value or 0 as temporary
+		currentFuel = fuelAmount.Value
+		if currentFuel == 0 then
+			print("⛽ Waiting for DataStore to load fuel value...")
+		else
+			print("⛽ Using temporary fuel value:", currentFuel, "(waiting for DataStore)")
+		end
 	end
 	
 	outOfFuel = (currentFuel <= 0)

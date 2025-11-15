@@ -4,6 +4,37 @@
 
 Successfully refactored `BoatScript.lua` from **738 lines** to **196 lines** (73% reduction) by splitting it into modular components.
 
+## What Gets Spawned?
+
+**The `Barge` model from `ReplicatedStorage.BoatTemplates` is what gets spawned.** This is the physical boat model (the 3D geometry, parts, VehicleSeat, etc.).
+
+### The Boat Modules Are NOT Models
+
+The modules in `src/shared/Modules/Boat/` are **code modules**, not boat models. They contain the logic that controls the boat.
+
+### How They Work Together
+
+1. **BoatSpawner clones the Barge model** from `ReplicatedStorage.BoatTemplates`
+2. **The cloned boat contains a VehicleSeat** with `BoatScript.lua` inside it
+3. **BoatScript.lua requires the modules** and uses them to control the boat
+4. **The modules operate on the physical boat parts** (Engine, SForce, DSeat, Base, etc.)
+
+### The Flow
+
+```
+Barge Model (in ReplicatedStorage.BoatTemplates)
+  └─ VehicleSeat
+      └─ BoatScript.lua (LocalScript)
+          ├─ requires BoatPhysics module → controls Engine/SForce
+          ├─ requires BoatFuel module → manages fuel consumption
+          ├─ requires BoatCargo module → tracks cargo
+          ├─ requires BoatHUD module → creates GUI
+          ├─ requires BoatAudio module → plays sounds
+          └─ requires BoatControls module → handles input
+```
+
+**The Barge model is the boat, and the modules are the brains that control it.**
+
 ## New Module Structure
 
 ```
