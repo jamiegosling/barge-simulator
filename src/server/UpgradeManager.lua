@@ -26,9 +26,9 @@ local UPGRADE_CONFIG = {
 	},
 	cargo_capacity = {
 		baseCost = 2500,
-		costMultiplier = 1.5,
+		costMultiplier = 2.5,
 		capacityIncrease = 100,
-		maxLevel = 20,
+		maxLevel = 4,
 		growthType = "linear"
 	},
 	fuel_capacity = {
