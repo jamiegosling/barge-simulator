@@ -53,6 +53,7 @@ local function GetPlayerBoatCargoCapacity(player)
 
 		if originalCargo and cargoMultiplier then
 			return originalCargo.Value * cargoMultiplier.Value
+			-- return 100 * cargoMultiplier.Value
 		elseif originalCargo then
 			return originalCargo.Value
 		end

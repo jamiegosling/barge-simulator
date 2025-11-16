@@ -21,19 +21,22 @@ local UPGRADE_CONFIG = {
 		baseCost = 2500,
 		costMultiplier = 1.5,
 		speedIncrease = 1.1,
-		maxLevel = 20
+		maxLevel = 20,
+		growthType = "exponential"
 	},
 	cargo_capacity = {
 		baseCost = 2500,
 		costMultiplier = 1.5,
-		capacityIncrease = 1.1,
-		maxLevel = 20
+		capacityIncrease = 100,
+		maxLevel = 20,
+		growthType = "linear"
 	},
 	fuel_capacity = {
 		baseCost = 2500,
 		costMultiplier = 1.5,
 		capacityIncrease = 1.1,
-		maxLevel = 20
+		maxLevel = 20,
+		growthType = "exponential"
 	}
 }
 
@@ -302,7 +305,12 @@ local function getUpgradeMultiplier(player, upgradeType)
 	if not config then return 1 end
 	
 	local increaseKey = upgradeType == "speed" and "speedIncrease" or "capacityIncrease"
-	return config[increaseKey] ^ (upgrades[levelKey] - 1)
+	
+	if config.growthType == "linear" then
+		return 1 + ((upgrades[levelKey] - 1) * (config[increaseKey] / 100))
+	else
+		return config[increaseKey] ^ (upgrades[levelKey] - 1)
+	end
 end
 
 -- Get current boat speed multiplier (backward compatibility)

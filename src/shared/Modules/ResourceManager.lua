@@ -278,9 +278,9 @@ end
 -- Cargo size configurations
 ResourceManager.CARGO_SIZES = {
 	{size = 100, multiplier = 1.0, label = "Small"},
-	{size = 110, multiplier = 1.8, label = "Medium"},
-	{size = 120, multiplier = 2.5, label = "Large"},
-	{size = 130, multiplier = 3.2, label = "Extra Large"}
+	{size = 200, multiplier = 1.8, label = "Medium"},
+	{size = 300, multiplier = 2.5, label = "Large"},
+	{size = 400, multiplier = 3.2, label = "Extra Large"}
 }
 
 -- Get all available jobs with dynamic pricing and distance-based reward redistribution
