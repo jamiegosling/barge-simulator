@@ -192,8 +192,6 @@ local function IncrementJobsCompleted(player, cargoType)
 			achievements.jobsByType[cargoType] = achievements.jobsByType[cargoType] + 1
 		end
 		
-		-- Reset session distance (for longest trip tracking)
-		achievements.sessionDistanceTraveled = 0
 	end
 end
 
@@ -214,6 +212,16 @@ local function IncrementUpgradesPurchased(player)
 	
 	if achievements then
 		achievements.totalUpgradesPurchased = achievements.totalUpgradesPurchased + 1
+	end
+end
+
+-- Reset session distance (called when player exits VehicleSeat)
+local function ResetSessionDistance(player)
+	local userId = tostring(player.UserId)
+	local achievements = playerAchievements[userId]
+	
+	if achievements then
+		achievements.sessionDistanceTraveled = 0
 	end
 end
 
@@ -291,6 +299,9 @@ achievementEvent.OnServerEvent:Connect(function(player, action, data)
 		if data and type(data) == "number" and data > 0 then
 			IncrementFuelConsumed(player, data)
 		end
+	elseif action == "resetSessionDistance" then
+		-- Client reporting player exited VehicleSeat
+		ResetSessionDistance(player)
 	end
 end)
 
@@ -302,5 +313,6 @@ return {
 	IncrementMoneyEarned = IncrementMoneyEarned,
 	IncrementUpgradesPurchased = IncrementUpgradesPurchased,
 	GetPlayerAchievements = GetPlayerAchievements,
-	savePlayerAchievements = savePlayerAchievements
+	savePlayerAchievements = savePlayerAchievements,
+	ResetSessionDistance = ResetSessionDistance
 }

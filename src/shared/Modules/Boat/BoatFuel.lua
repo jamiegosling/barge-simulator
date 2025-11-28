@@ -24,6 +24,9 @@ local MIN_STEER_SPEED = 1
 local distanceAccumulator = 0
 local DISTANCE_REPORT_THRESHOLD = 100  -- Report to server every 100 studs
 
+-- Track previous occupancy state for detecting seat exit
+local wasOccupied = false
+
 -- Server-side: Get AchievementManager reference
 local AchievementManager
 if isServer then
@@ -154,6 +157,9 @@ function BoatFuel.Update()
 end
 
 function BoatFuel.ConsumeFuel(currentPosition, isOccupied, forwardSpeed)
+	-- Check for seat exit to reset session distance for longest trip tracking
+	BoatFuel.CheckSeatExit(isOccupied)
+	
 	-- Fuel consumption based on distance traveled
 	if lastPosition and isOccupied and math.abs(forwardSpeed) > MIN_STEER_SPEED then
 		local distance = (currentPosition - lastPosition).Magnitude
@@ -238,6 +244,21 @@ end
 function BoatFuel.IsFuelPurchaseInProgress()
 	local purchaseFlag = BoatFuel.script:FindFirstChild("FuelPurchaseInProgress")
 	return purchaseFlag and purchaseFlag.Value == true
+end
+
+function BoatFuel.CheckSeatExit(isOccupied)
+	if wasOccupied and not isOccupied then
+		-- Player just exited the seat - reset session distance for longest trip tracking
+		if isServer and AchievementManager and BoatFuel.player then
+			AchievementManager.ResetSessionDistance(BoatFuel.player)
+		elseif not isServer then
+			local achievementEvent = ReplicatedStorage:FindFirstChild("AchievementEvent")
+			if achievementEvent then
+				achievementEvent:FireServer("resetSessionDistance")
+			end
+		end
+	end
+	wasOccupied = isOccupied
 end
 
 function BoatFuel.GetValues()
