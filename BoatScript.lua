@@ -42,12 +42,32 @@ BoatPhysics.Initialize({
 	SteerSpeed = 500
 })
 
+-- Get the player who owns this boat (for achievement tracking)
+local player = nil
+local ownerTag = boat:FindFirstChild("Owner")
+if ownerTag then
+	local userId = ownerTag.Value
+	-- Convert to number if it's a string
+	if type(userId) == "string" then
+		userId = tonumber(userId)
+	end
+	if userId then
+		player = Players:GetPlayerByUserId(userId)
+		print("🎮 BoatScript: Found owner - UserId:", userId, "Player:", player and player.Name or "nil")
+	else
+		warn("⚠️ BoatScript: Owner tag exists but UserId is invalid:", ownerTag.Value)
+	end
+else
+	warn("⚠️ BoatScript: No Owner tag found on boat")
+end
+
 -- Initialize Fuel Module
 BoatFuel.Initialize({
 	boat = boat,
 	script = script,
 	baseMaxFuel = 200,
-	baseCurrentFuel = 100
+	baseCurrentFuel = 100,
+	player = player  -- Pass player reference for achievement tracking
 })
 
 -- Initialize Cargo Module

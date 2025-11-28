@@ -1,9 +1,13 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local JobsManager = require(ReplicatedStorage.Shared.Modules.JobsManager)
 local JobMessage = ReplicatedStorage:WaitForChild("JobMessage")
 local JobStatus = ReplicatedStorage:WaitForChild("JobStatus")
 local UpdateJobDestination = ReplicatedStorage:WaitForChild("UpdateJobDestination")
+
+-- Import AchievementManager
+local AchievementManager = require(ServerScriptService:WaitForChild("Server"):WaitForChild("AchievementManager"))
 
 local JobPicked = ReplicatedStorage:WaitForChild("JobPicked")
 local CancelJob = ReplicatedStorage:WaitForChild("CancelJob")
@@ -176,6 +180,10 @@ local function CheckJobActionInCurrentZone(player)
 		print(player.Name .. " completed " .. job.name .. " and earned " .. job.reward)
 		JobMessage:FireClient(player, "Completed job! Earned £" .. job.reward)
 		JobStatus:FireClient(player, "completed", job)
+		
+		-- Track achievements
+		AchievementManager.IncrementJobsCompleted(player, job.cargo)
+		AchievementManager.IncrementMoneyEarned(player, job.reward)
 		
 		-- Remove guideline
 		UpdateJobDestination:FireClient(player, nil, false)

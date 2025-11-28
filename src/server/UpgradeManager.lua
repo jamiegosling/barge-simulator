@@ -1,6 +1,16 @@
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+-- Import AchievementManager (with error handling in case it loads after this script)
+local AchievementManager
+pcall(function()
+	local serverFolder = ServerScriptService:WaitForChild("Server", 5)
+	if serverFolder then
+		AchievementManager = require(serverFolder:WaitForChild("AchievementManager", 5))
+	end
+end)
 
 -- DataStore for persistent player upgrade data
 local upgradeDataStore = DataStoreService:GetDataStore("BoatUpgrades")
@@ -492,6 +502,11 @@ local function purchaseUpgrade(player, upgradeType)
 	end
 	
 	print(player.Name, "upgraded", upgradeType, "to level", upgrades[levelKey], "for £" .. cost)
+	
+	-- Track achievement
+	if AchievementManager then
+		AchievementManager.IncrementUpgradesPurchased(player)
+	end
 	
 	-- Update existing boat if player has one
 	local playerBoat = workspace:FindFirstChild("PlayerBoats") and workspace.PlayerBoats:FindFirstChild("Boat_" .. player.Name)
